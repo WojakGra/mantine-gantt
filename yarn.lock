@@ -6596,37 +6596,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"extension-template-docs@workspace:docs":
-  version: 0.0.0-use.local
-  resolution: "extension-template-docs@workspace:docs"
-  dependencies:
-    "@mantine/code-highlight": "npm:8.3.14"
-    "@mantine/core": "npm:8.3.14"
-    "@mantine/hooks": "npm:8.3.14"
-    "@mantinex/demo": "npm:^2.0.0"
-    "@mantinex/dev-icons": "npm:^2.0.0"
-    "@mantinex/mantine-header": "npm:^2.0.0"
-    "@mantinex/mantine-logo": "npm:^2.0.0"
-    "@mantinex/mantine-meta": "npm:^2.0.0"
-    "@mdx-js/loader": "npm:^3.1.0"
-    "@mdx-js/react": "npm:^3.1.0"
-    "@next/mdx": "npm:^15.3.2"
-    "@tabler/icons-react": "npm:^3.33.0"
-    "@types/mdx": "npm:^2.0.13"
-    "@types/node": "npm:^22.15.24"
-    "@types/react": "npm:^19"
-    "@types/react-dom": "npm:^19"
-    mantine-extension-template: "workspace:*"
-    next: "npm:15.3.2"
-    react: "npm:19.1.0"
-    react-dom: "npm:19.1.0"
-    remark-slug: "npm:^7.0.1"
-    shiki: "npm:^3.4.2"
-    type-fest: "npm:^4.41.0"
-    typescript: "npm:5.8.3"
-  languageName: unknown
-  linkType: soft
-
 "extglob@npm:^2.0.4":
   version: 2.0.4
   resolution: "extglob@npm:2.0.4"
@@ -10003,9 +9972,40 @@ __metadata:
   languageName: node
   linkType: hard
 
-"mantine-extension-template@workspace:*, mantine-extension-template@workspace:package":
+"mantine-gantt-docs@workspace:docs":
   version: 0.0.0-use.local
-  resolution: "mantine-extension-template@workspace:package"
+  resolution: "mantine-gantt-docs@workspace:docs"
+  dependencies:
+    "@mantine/code-highlight": "npm:8.3.14"
+    "@mantine/core": "npm:8.3.14"
+    "@mantine/hooks": "npm:8.3.14"
+    "@mantinex/demo": "npm:^2.0.0"
+    "@mantinex/dev-icons": "npm:^2.0.0"
+    "@mantinex/mantine-header": "npm:^2.0.0"
+    "@mantinex/mantine-logo": "npm:^2.0.0"
+    "@mantinex/mantine-meta": "npm:^2.0.0"
+    "@mdx-js/loader": "npm:^3.1.0"
+    "@mdx-js/react": "npm:^3.1.0"
+    "@next/mdx": "npm:^15.3.2"
+    "@tabler/icons-react": "npm:^3.33.0"
+    "@types/mdx": "npm:^2.0.13"
+    "@types/node": "npm:^22.15.24"
+    "@types/react": "npm:^19"
+    "@types/react-dom": "npm:^19"
+    mantine-gantt: "workspace:*"
+    next: "npm:15.3.2"
+    react: "npm:19.1.0"
+    react-dom: "npm:19.1.0"
+    remark-slug: "npm:^7.0.1"
+    shiki: "npm:^3.4.2"
+    type-fest: "npm:^4.41.0"
+    typescript: "npm:5.8.3"
+  languageName: unknown
+  linkType: soft
+
+"mantine-gantt@workspace:*, mantine-gantt@workspace:package":
+  version: 0.0.0-use.local
+  resolution: "mantine-gantt@workspace:package"
   peerDependencies:
     "@mantine/core": ">=7.0.0"
     "@mantine/hooks": ">=7.0.0"

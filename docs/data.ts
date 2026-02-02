@@ -25,15 +25,10 @@ export interface PackageData {
 }
 
 export const PACKAGE_DATA: PackageData = {
-  packageName: 'mantine-extension-template',
-  packageDescription:
-    'A template for mantine extensions, includes full setup for package development and documentation',
-  mdxFileUrl:
-    'https://github.com/rtivital/mantine-extension-template/blob/master/docs/pages/index.mdx',
-  repositoryUrl: 'https://github.com/rtivital/mantine-extension-template',
-  licenseUrl: 'https://github.com/rtivital/mantine-extension-template/blob/master/LICENSE',
-  author: {
-    name: 'Vitaly Rtishchev',
-    githubUsername: 'rtivital',
-  },
+  packageName: 'mantine-gantt',
+  packageDescription: 'A gantt chart component for mantine',
+  mdxFileUrl: 'https://github.com/WojakGra/mantine-gantt/blob/master/docs/pages/index.mdx',
+  repositoryUrl: 'https://github.com/WojakGra/mantine-gantt',
+  licenseUrl: 'https://github.com/WojakGra/mantine-gantt/blob/master/LICENSE',
+  author: { name: 'Jakub Wojdziak', githubUsername: 'WojakGra' },
 };

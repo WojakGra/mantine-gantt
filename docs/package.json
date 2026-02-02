@@ -1,5 +1,5 @@
 {
-  "name": "extension-template-docs",
+  "name": "mantine-gantt-docs",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -22,7 +22,7 @@
     "@next/mdx": "^15.3.2",
     "@tabler/icons-react": "^3.33.0",
     "@types/mdx": "^2.0.13",
-    "mantine-extension-template": "workspace:*",
+    "mantine-gantt": "workspace:*",
     "next": "15.3.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
