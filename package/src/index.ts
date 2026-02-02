@@ -1,7 +1,14 @@
-export { TestComponent } from './TestComponent';
-export type {
-  TestComponentProps,
-  TestComponentCssVariables,
-  TestComponentFactory,
-  TestComponentStylesNames,
-} from './TestComponent';
+// Gantt Chart component
+export { Gantt, mockTasks } from './Gantt';
+export type { GanttProps, GanttTask, GanttStylesNames, GanttCssVariables } from './Gantt';
+
+// Utility exports for advanced usage
+export {
+  dateToPixel,
+  pixelToDate,
+  snapToGrid,
+  durationToPixels,
+  formatTaskDate,
+  getTaskEndDate,
+  calculateTimelineBounds,
+} from './Gantt';

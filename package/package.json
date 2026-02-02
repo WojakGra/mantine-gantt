@@ -29,6 +29,11 @@
     "./styles.layer.css": "./dist/styles.layer.css"
   },
   "repository": "https://github.com/WojakGra/mantine-gantt.git",
+  "dependencies": {
+    "@dnd-kit/core": "^6.1.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "dayjs": "^1.11.10"
+  },
   "peerDependencies": {
     "@mantine/core": ">=7.0.0",
     "@mantine/hooks": ">=7.0.0",

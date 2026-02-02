@@ -1,0 +1,354 @@
+import dayjs from 'dayjs';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  DndContext,
+  DragEndEvent,
+  DragMoveEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { Box, createVarsResolver, factory, useProps, useStyles } from '@mantine/core';
+import { DependencyLinks } from './DependencyLinks';
+import { TaskBar } from './TaskBar';
+import { TaskList } from './TaskList';
+import { TimelineGrid } from './TimelineGrid';
+import { TimelineHeader } from './TimelineHeader';
+import type {
+  DragContext,
+  GanttCssVariables,
+  GanttFactory,
+  GanttProps,
+  GanttStylesNames,
+  GanttTask,
+} from './types';
+import { calculateTimelineBounds, dateToPixel, snapToGrid } from './utils';
+import classes from './Gantt.module.css';
+
+const defaultProps: Partial<GanttProps> = {
+  columnWidth: 40,
+  rowHeight: 44,
+  taskListWidth: 320,
+  viewMode: 'day',
+};
+
+const varsResolver = createVarsResolver<GanttFactory>(
+  (_, { columnWidth, rowHeight, taskListWidth }) => ({
+    root: {
+      '--gantt-column-width': `${columnWidth}px`,
+      '--gantt-row-height': `${rowHeight}px`,
+      '--gantt-header-height': '50px',
+      '--gantt-task-list-width': `${taskListWidth}px`,
+    },
+  })
+);
+
+export const Gantt = factory<GanttFactory>((_props, ref) => {
+  const props = useProps('Gantt', defaultProps, _props);
+  const {
+    classNames,
+    className,
+    style,
+    styles,
+    unstyled,
+    vars,
+    tasks: initialTasks,
+    onTaskUpdate,
+    onTaskClick,
+    onLinkCreate,
+    columnWidth = 40,
+    rowHeight = 44,
+    startDate,
+    endDate,
+    viewMode,
+    ...others
+  } = props;
+
+  const getStyles = useStyles<GanttFactory>({
+    name: 'Gantt',
+    classes,
+    props,
+    className,
+    style,
+    classNames,
+    styles,
+    unstyled,
+    vars,
+    varsResolver,
+  });
+
+  // Internal state for tasks
+  const [tasks, setTasks] = useState<GanttTask[]>(initialTasks);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [activeDragType, setActiveDragType] = useState<
+    'move' | 'resize-end' | 'resize-start' | 'link' | null
+  >(null);
+  const [dragDelta, setDragDelta] = useState<number>(0);
+
+  // Calculate timeline bounds
+  const bounds = useMemo(
+    () => calculateTimelineBounds(tasks, startDate, endDate),
+    [tasks, startDate, endDate]
+  );
+
+  // Calculate total timeline width
+  const totalDays = bounds.end.diff(bounds.start, 'day') + 1;
+  const timelineWidth = totalDays * columnWidth;
+
+  // Refs for scroll synchronization
+  const timelineBodyRef = useRef<HTMLDivElement>(null);
+  const taskListBodyRef = useRef<HTMLDivElement>(null);
+  const timelineHeaderRef = useRef<HTMLDivElement>(null);
+
+  // Sync scroll between task list and timeline
+  const handleTimelineScroll = useCallback(() => {
+    if (timelineBodyRef.current && taskListBodyRef.current) {
+      taskListBodyRef.current.scrollTop = timelineBodyRef.current.scrollTop;
+    }
+    // Sync horizontal scroll with header
+    if (timelineBodyRef.current && timelineHeaderRef.current) {
+      timelineHeaderRef.current.scrollLeft = timelineBodyRef.current.scrollLeft;
+    }
+  }, []);
+
+  const handleTaskListScroll = useCallback(() => {
+    if (timelineBodyRef.current && taskListBodyRef.current) {
+      timelineBodyRef.current.scrollTop = taskListBodyRef.current.scrollTop;
+    }
+  }, []);
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
+
+  // Handle drag start - track which task is being dragged and type
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const { active } = event;
+    const data = active.data.current as {
+      type: 'move' | 'resize-end' | 'resize-start' | 'link';
+      taskId: string;
+    };
+    setActiveDragId(data.taskId);
+    setActiveDragType(data.type);
+    setDragDelta(0);
+  }, []);
+
+  // Handle drag move - update delta for live link updates
+  const handleDragMove = useCallback(
+    (event: DragMoveEvent) => {
+      const snappedDelta = snapToGrid(event.delta.x, columnWidth);
+      setDragDelta(snappedDelta);
+    },
+    [columnWidth]
+  );
+
+  // Handle drag end - apply the final delta or create link
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over, delta } = event;
+      const data = active.data.current as {
+        type: 'move' | 'resize-end' | 'resize-start' | 'link';
+        taskId: string;
+      };
+
+      // Handle link creation
+      if (data.type === 'link' && over) {
+        const overData = over.data.current as { taskId: string } | undefined;
+        if (overData && overData.taskId !== data.taskId) {
+          // Create link from source to target
+          const fromTaskId = data.taskId;
+          const toTaskId = overData.taskId;
+
+          // Update internal state
+          setTasks((currentTasks) =>
+            currentTasks.map((task) => {
+              if (task.id !== toTaskId) {
+                return task;
+              }
+              // Add dependency if not already present
+              const deps = task.dependencies || [];
+              if (deps.includes(fromTaskId)) {
+                return task;
+              }
+              return {
+                ...task,
+                dependencies: [...deps, fromTaskId],
+              };
+            })
+          );
+
+          // Fire callback
+          if (onLinkCreate) {
+            onLinkCreate(fromTaskId, toTaskId);
+          }
+        }
+
+        setActiveDragId(null);
+        setActiveDragType(null);
+        setDragDelta(0);
+        return;
+      }
+
+      // Snap delta to grid
+      const snappedDelta = snapToGrid(delta.x, columnWidth);
+      const daysDelta = Math.round(snappedDelta / columnWidth);
+
+      // Only update if there was a change
+      if (daysDelta !== 0) {
+        setTasks((currentTasks) => {
+          const updatedTasks = currentTasks.map((task) => {
+            if (task.id !== data.taskId) {
+              return task;
+            }
+
+            if (data.type === 'move') {
+              // Move entire bar - update start date, keep duration
+              const newStartDate = dayjs(task.startDate).add(daysDelta, 'day');
+              return {
+                ...task,
+                startDate: newStartDate.format('YYYY-MM-DD'),
+              };
+            } else if (data.type === 'resize-end') {
+              // Resize from end - keep start date, update duration
+              const newDuration = Math.max(1, task.duration + daysDelta);
+              return {
+                ...task,
+                duration: newDuration,
+              };
+            }
+            // Resize from start - update start date AND duration
+            const newDuration = Math.max(1, task.duration - daysDelta);
+            const newStartDate = dayjs(task.startDate).add(daysDelta, 'day');
+            return {
+              ...task,
+              startDate: newStartDate.format('YYYY-MM-DD'),
+              duration: newDuration,
+            };
+          });
+
+          // Fire callback with updated task
+          const updatedTask = updatedTasks.find((t) => t.id === data.taskId);
+          if (updatedTask && onTaskUpdate) {
+            onTaskUpdate(updatedTask);
+          }
+
+          return updatedTasks;
+        });
+      }
+
+      setActiveDragId(null);
+      setActiveDragType(null);
+      setDragDelta(0);
+    },
+    [columnWidth, onTaskUpdate, onLinkCreate]
+  );
+
+  // Calculate today line position
+  const today = dayjs();
+  const todayPosition = dateToPixel(today, bounds.start, columnWidth);
+  const showTodayLine = today.isAfter(bounds.start) && today.isBefore(bounds.end);
+
+  return (
+    <Box ref={ref} {...getStyles('root')} {...others}>
+      {/* Left Pane - Task List */}
+      <TaskList
+        tasks={tasks}
+        getStyles={getStyles}
+        bodyRef={taskListBodyRef}
+        onScroll={handleTaskListScroll}
+      />
+
+      {/* Right Pane - Timeline */}
+      <div {...getStyles('timeline')}>
+        <div {...getStyles('timelineHeader')} ref={timelineHeaderRef}>
+          <TimelineHeader
+            startDate={bounds.start}
+            endDate={bounds.end}
+            columnWidth={columnWidth}
+            getStyles={getStyles}
+            totalWidth={timelineWidth}
+          />
+        </div>
+
+        <DndContext
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEnd}
+        >
+          <div {...getStyles('timelineBody')} ref={timelineBodyRef} onScroll={handleTimelineScroll}>
+            <div
+              {...getStyles('timelineContent')}
+              style={{ width: timelineWidth, height: tasks.length * rowHeight }}
+            >
+              <TimelineGrid
+                startDate={bounds.start}
+                endDate={bounds.end}
+                columnWidth={columnWidth}
+                rowCount={tasks.length}
+                rowHeight={rowHeight}
+                getStyles={getStyles}
+              />
+
+              {/* Today line */}
+              {showTodayLine && (
+                <div className={classes.todayLine} style={{ left: todayPosition }} />
+              )}
+
+              {/* Task rows with bars */}
+              {tasks.map((task, index) => (
+                <div key={task.id} {...getStyles('timelineRow')} style={{ top: index * rowHeight }}>
+                  <TaskBar
+                    task={task}
+                    startDate={bounds.start}
+                    columnWidth={columnWidth}
+                    getStyles={getStyles}
+                    isDragging={activeDragId === task.id}
+                    onClick={() => onTaskClick?.(task)}
+                  />
+                </div>
+              ))}
+
+              {/* Dependency arrows */}
+              <DependencyLinks
+                tasks={tasks}
+                startDate={bounds.start}
+                columnWidth={columnWidth}
+                rowHeight={rowHeight}
+                activeDragId={activeDragId}
+                activeDragType={activeDragType}
+                dragDelta={dragDelta}
+              />
+            </div>
+          </div>
+
+          {/* Drag overlay for link connector */}
+          <DragOverlay>
+            {activeDragType === 'link' && (
+              <div
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--mantine-primary-color-filled)',
+                  border: '2px solid white',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                }}
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
+      </div>
+    </Box>
+  );
+});
+
+Gantt.displayName = 'Gantt';
+Gantt.classes = classes;
