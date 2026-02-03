@@ -33,8 +33,8 @@ export function DependencyLinks({
 
   const links = useMemo(() => {
     const result: Array<{ id: string; points: string }> = [];
-    const barHeight = 28;
-    const barTopOffset = 8;
+    // Bar is vertically centered in the row, so midY is simply rowHeight / 2
+    const barMidYOffset = rowHeight / 2;
 
     tasks.forEach((toTask, toIndex) => {
       if (!toTask.dependencies || toTask.dependencies.length === 0) {
@@ -53,11 +53,10 @@ export function DependencyLinks({
         let fromBarRight =
           dateToPixel(fromTask.startDate, startDate, columnWidth) +
           durationToPixels(fromTask.duration, columnWidth);
-        const fromBarBottom = fromIndex * rowHeight + barTopOffset + barHeight;
-        const fromBarMidY = fromIndex * rowHeight + barTopOffset + barHeight / 2;
+        const fromBarMidY = fromIndex * rowHeight + barMidYOffset;
 
         let toBarLeft = dateToPixel(toTask.startDate, startDate, columnWidth);
-        const toBarMidY = toIndex * rowHeight + barTopOffset + barHeight / 2;
+        const toBarMidY = toIndex * rowHeight + barMidYOffset;
 
         // Apply drag delta if this task is being dragged
         if (activeDragId === fromTask.id && dragDelta !== 0) {
@@ -82,10 +81,11 @@ export function DependencyLinks({
         // Generate polyline points
         const points = generateSvarStylePoints(
           fromBarRight,
-          fromBarBottom,
           fromBarMidY,
           toBarLeft,
           toBarMidY,
+          fromIndex,
+          toIndex,
           rowHeight
         );
 
@@ -132,10 +132,11 @@ export function DependencyLinks({
  */
 function generateSvarStylePoints(
   fromX: number,
-  fromBottom: number,
   fromMidY: number,
   toX: number,
   toMidY: number,
+  fromIndex: number,
+  toIndex: number,
   rowHeight: number
 ): string {
   const points: Array<[number, number]> = [];
@@ -149,8 +150,9 @@ function generateSvarStylePoints(
   points.push([exitX, fromMidY]);
 
   // Calculate the Y for the horizontal routing lane
-  // This should be below the source task bar but in the row gap
-  const routeY = fromBottom + (rowHeight - 28 - 8) / 2 + 4;
+  // Route through the gap between rows (use the row boundary)
+  const routeRowIndex = Math.max(fromIndex, toIndex);
+  const routeY = routeRowIndex * rowHeight;
 
   // Go down to the routing lane
   points.push([exitX, routeY]);

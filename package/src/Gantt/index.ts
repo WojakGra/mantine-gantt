@@ -3,7 +3,6 @@ export { TaskBar } from './TaskBar';
 export { TaskList } from './TaskList';
 export { TimelineGrid } from './TimelineGrid';
 export { TimelineHeader } from './TimelineHeader';
-export { mockTasks } from './mockData';
 
 export type {
   GanttProps,

@@ -10,20 +10,14 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { flushSync } from 'react-dom';
 import { Box, createVarsResolver, factory, useProps, useStyles } from '@mantine/core';
 import { DependencyLinks } from './DependencyLinks';
 import { TaskBar } from './TaskBar';
 import { TaskList } from './TaskList';
 import { TimelineGrid } from './TimelineGrid';
 import { TimelineHeader } from './TimelineHeader';
-import type {
-  DragContext,
-  GanttCssVariables,
-  GanttFactory,
-  GanttProps,
-  GanttStylesNames,
-  GanttTask,
-} from './types';
+import type { GanttFactory, GanttProps, GanttTask } from './types';
 import { calculateTimelineBounds, dateToPixel, snapToGrid } from './utils';
 import classes from './Gantt.module.css';
 
@@ -60,6 +54,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     onLinkCreate,
     columnWidth = 40,
     rowHeight = 44,
+    showTitle = false,
     startDate,
     endDate,
     viewMode,
@@ -88,10 +83,17 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   const [dragDelta, setDragDelta] = useState<number>(0);
 
   // Calculate timeline bounds
-  const bounds = useMemo(
+  const calculatedBounds = useMemo(
     () => calculateTimelineBounds(tasks, startDate, endDate),
     [tasks, startDate, endDate]
   );
+
+  // Use ref to stabilize bounds - only update when NOT dragging
+  const stableBoundsRef = useRef(calculatedBounds);
+  if (!activeDragId) {
+    stableBoundsRef.current = calculatedBounds;
+  }
+  const bounds = stableBoundsRef.current;
 
   // Calculate total timeline width
   const totalDays = bounds.end.diff(bounds.start, 'day') + 1;
@@ -158,38 +160,41 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
         taskId: string;
       };
 
-      // Handle link creation
-      if (data.type === 'link' && over) {
-        const overData = over.data.current as { taskId: string } | undefined;
-        if (overData && overData.taskId !== data.taskId) {
-          // Create link from source to target
-          const fromTaskId = data.taskId;
-          const toTaskId = overData.taskId;
+      // Handle link creation - always return early for link type
+      if (data.type === 'link') {
+        if (over) {
+          const overData = over.data.current as { taskId: string } | undefined;
+          if (overData && overData.taskId !== data.taskId) {
+            // Create link from source to target
+            const fromTaskId = data.taskId;
+            const toTaskId = overData.taskId;
 
-          // Update internal state
-          setTasks((currentTasks) =>
-            currentTasks.map((task) => {
-              if (task.id !== toTaskId) {
-                return task;
-              }
-              // Add dependency if not already present
-              const deps = task.dependencies || [];
-              if (deps.includes(fromTaskId)) {
-                return task;
-              }
-              return {
-                ...task,
-                dependencies: [...deps, fromTaskId],
-              };
-            })
-          );
+            // Update internal state
+            setTasks((currentTasks) =>
+              currentTasks.map((task) => {
+                if (task.id !== toTaskId) {
+                  return task;
+                }
+                // Add dependency if not already present
+                const deps = task.dependencies || [];
+                if (deps.includes(fromTaskId)) {
+                  return task;
+                }
+                return {
+                  ...task,
+                  dependencies: [...deps, fromTaskId],
+                };
+              })
+            );
 
-          // Fire callback
-          if (onLinkCreate) {
-            onLinkCreate(fromTaskId, toTaskId);
+            // Fire callback
+            if (onLinkCreate) {
+              onLinkCreate(fromTaskId, toTaskId);
+            }
           }
         }
 
+        // Always clear drag state and return for link type
         setActiveDragId(null);
         setActiveDragType(null);
         setDragDelta(0);
@@ -202,50 +207,59 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
       // Only update if there was a change
       if (daysDelta !== 0) {
-        setTasks((currentTasks) => {
-          const updatedTasks = currentTasks.map((task) => {
-            if (task.id !== data.taskId) {
-              return task;
-            }
+        // Use flushSync to ensure ALL state updates happen in one synchronous render
+        flushSync(() => {
+          setTasks((currentTasks) => {
+            const updatedTasks = currentTasks.map((task) => {
+              if (task.id !== data.taskId) {
+                return task;
+              }
 
-            if (data.type === 'move') {
-              // Move entire bar - update start date, keep duration
+              if (data.type === 'move') {
+                // Move entire bar - update start date, keep duration
+                const newStartDate = dayjs(task.startDate).add(daysDelta, 'day');
+                return {
+                  ...task,
+                  startDate: newStartDate.format('YYYY-MM-DD'),
+                };
+              } else if (data.type === 'resize-end') {
+                // Resize from end - keep start date, update duration
+                const newDuration = Math.max(1, task.duration + daysDelta);
+                return {
+                  ...task,
+                  duration: newDuration,
+                };
+              }
+              // Resize from start - update start date AND duration
+              const newDuration = Math.max(1, task.duration - daysDelta);
               const newStartDate = dayjs(task.startDate).add(daysDelta, 'day');
               return {
                 ...task,
                 startDate: newStartDate.format('YYYY-MM-DD'),
-              };
-            } else if (data.type === 'resize-end') {
-              // Resize from end - keep start date, update duration
-              const newDuration = Math.max(1, task.duration + daysDelta);
-              return {
-                ...task,
                 duration: newDuration,
               };
+            });
+
+            // Fire callback with updated task
+            const updatedTask = updatedTasks.find((t) => t.id === data.taskId);
+            if (updatedTask && onTaskUpdate) {
+              onTaskUpdate(updatedTask);
             }
-            // Resize from start - update start date AND duration
-            const newDuration = Math.max(1, task.duration - daysDelta);
-            const newStartDate = dayjs(task.startDate).add(daysDelta, 'day');
-            return {
-              ...task,
-              startDate: newStartDate.format('YYYY-MM-DD'),
-              duration: newDuration,
-            };
+
+            return updatedTasks;
           });
 
-          // Fire callback with updated task
-          const updatedTask = updatedTasks.find((t) => t.id === data.taskId);
-          if (updatedTask && onTaskUpdate) {
-            onTaskUpdate(updatedTask);
-          }
-
-          return updatedTasks;
+          // Clear drag state in same synchronous update
+          setActiveDragId(null);
+          setActiveDragType(null);
+          setDragDelta(0);
         });
+      } else {
+        // No position change, just clear drag state
+        setActiveDragId(null);
+        setActiveDragType(null);
+        setDragDelta(0);
       }
-
-      setActiveDragId(null);
-      setActiveDragType(null);
-      setDragDelta(0);
     },
     [columnWidth, onTaskUpdate, onLinkCreate]
   );
@@ -306,11 +320,15 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
               {tasks.map((task, index) => (
                 <div key={task.id} {...getStyles('timelineRow')} style={{ top: index * rowHeight }}>
                   <TaskBar
+                    key={`taskbar-${task.id}`}
                     task={task}
                     startDate={bounds.start}
                     columnWidth={columnWidth}
                     getStyles={getStyles}
                     isDragging={activeDragId === task.id}
+                    isLinkDragging={activeDragType === 'link'}
+                    linkSourceId={activeDragType === 'link' ? activeDragId : null}
+                    showTitle={showTitle}
                     onClick={() => onTaskClick?.(task)}
                   />
                 </div>

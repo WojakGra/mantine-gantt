@@ -1,6 +1,6 @@
 import type { Dayjs } from 'dayjs';
-import React from 'react';
-import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
+import React, { useCallback, useRef } from 'react';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { getThemeColor, useMantineTheme, type GetStylesApi } from '@mantine/core';
 import type { GanttFactory, GanttTask } from './types';
 import { dateToPixel, durationToPixels, snapToGrid } from './utils';
@@ -11,25 +11,29 @@ interface TaskBarProps {
   columnWidth: number;
   getStyles: GetStylesApi<GanttFactory>;
   isDragging?: boolean;
+  isLinkDragging?: boolean;
+  linkSourceId?: string | null;
+  showTitle?: boolean;
   onClick?: () => void;
 }
 
-export function TaskBar({
+function TaskBarComponent({
   task,
   startDate,
   columnWidth,
   getStyles,
   isDragging,
+  isLinkDragging,
+  linkSourceId,
+  showTitle,
   onClick,
 }: TaskBarProps) {
   const theme = useMantineTheme();
-  const { active } = useDndContext();
 
-  // Check if a link is being dragged
-  const isLinkDragging = active?.data.current?.type === 'link';
-  const linkSourceId = isLinkDragging ? active?.data.current?.taskId : null;
+  // Track if we were just dragging to prevent flicker
+  const wasDraggingRef = useRef(false);
 
-  // Calculate base position and width
+  // Calculate base position and width from task data
   const baseLeft = dateToPixel(task.startDate, startDate, columnWidth);
   const baseWidth = durationToPixels(task.duration, columnWidth);
 
@@ -81,14 +85,22 @@ export function TaskBar({
     data: { type: 'link', taskId: task.id },
   });
 
-  // Droppable for receiving a link (only active when a link is being dragged)
+  // Droppable for receiving a link
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `link-to-${task.id}`,
     data: { taskId: task.id },
-    disabled: !isLinkDragging || linkSourceId === task.id,
   });
 
-  // Show link target outline only when link is being dragged and hovering this task
+  // Stable ref callback to prevent re-registration on every render
+  const setNodeRef = useCallback(
+    (node: HTMLElement | null) => {
+      setMoveRef(node);
+      setDropRef(node);
+    },
+    [setMoveRef, setDropRef]
+  );
+
+  // Show link target outline only when link is being dragged and hovering this task (not self)
   const showLinkTarget = isLinkDragging && isOver && linkSourceId !== task.id;
 
   // Calculate visual position during drag
@@ -98,6 +110,11 @@ export function TaskBar({
   if (moveTransform) {
     const snappedDelta = snapToGrid(moveTransform.x, columnWidth);
     visualLeft = baseLeft + snappedDelta;
+    wasDraggingRef.current = true;
+  } else if (wasDraggingRef.current) {
+    // Just stopped dragging - use baseLeft (state has updated)
+    // Clear the flag after this render
+    wasDraggingRef.current = false;
   }
 
   if (resizeEndTransform) {
@@ -113,10 +130,7 @@ export function TaskBar({
 
   return (
     <div
-      ref={(node) => {
-        setMoveRef(node);
-        setDropRef(node);
-      }}
+      ref={setNodeRef}
       {...getStyles('taskBar')}
       {...moveAttributes}
       {...moveListeners}
@@ -142,7 +156,9 @@ export function TaskBar({
       <div {...getStyles('taskBarProgress')} style={{ width: `${task.progress}%` }} />
 
       {/* Label */}
-      <span {...getStyles('taskBarLabel')}>{task.label}</span>
+      <span {...getStyles('taskBarLabel')} title={showTitle ? task.label : undefined}>
+        {task.label}
+      </span>
 
       {/* Right resize handle */}
       <div
@@ -161,7 +177,6 @@ export function TaskBar({
         {...linkListeners}
         onPointerDown={(e) => {
           e.stopPropagation();
-          // Call the original handler from linkListeners
           (linkListeners as any)?.onPointerDown?.(e);
         }}
         onClick={(e) => e.stopPropagation()}
@@ -169,5 +184,25 @@ export function TaskBar({
     </div>
   );
 }
+
+// Custom comparison to prevent re-renders when task data hasn't changed
+function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolean {
+  return (
+    prevProps.task.id === nextProps.task.id &&
+    prevProps.task.startDate === nextProps.task.startDate &&
+    prevProps.task.duration === nextProps.task.duration &&
+    prevProps.task.progress === nextProps.task.progress &&
+    prevProps.task.label === nextProps.task.label &&
+    prevProps.task.color === nextProps.task.color &&
+    prevProps.columnWidth === nextProps.columnWidth &&
+    prevProps.isDragging === nextProps.isDragging &&
+    prevProps.isLinkDragging === nextProps.isLinkDragging &&
+    prevProps.linkSourceId === nextProps.linkSourceId &&
+    prevProps.showTitle === nextProps.showTitle &&
+    prevProps.startDate.isSame(nextProps.startDate)
+  );
+}
+
+export const TaskBar = React.memo(TaskBarComponent, arePropsEqual);
 
 TaskBar.displayName = 'TaskBar';

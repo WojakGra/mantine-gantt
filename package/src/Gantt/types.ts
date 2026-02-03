@@ -81,6 +81,9 @@ export interface GanttBaseProps {
 
   /** View mode: 'day' | 'week' | 'month', default 'day' */
   viewMode?: 'day' | 'week' | 'month';
+
+  /** Whether to show task titles on hover, default false */
+  showTitle?: boolean;
 }
 
 export type GanttFactory = Factory<{

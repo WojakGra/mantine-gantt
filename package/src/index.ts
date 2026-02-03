@@ -1,8 +1,14 @@
 // Gantt Chart component
-export { Gantt, mockTasks } from './Gantt';
-export type { GanttProps, GanttTask, GanttStylesNames, GanttCssVariables } from './Gantt';
+export { Gantt } from './Gantt';
+export type {
+  GanttProps,
+  GanttTask,
+  GanttStylesNames,
+  GanttFactory,
+  GanttCssVariables,
+} from './Gantt';
 
-// Utility exports for advanced usage
+// Utility exports
 export {
   dateToPixel,
   pixelToDate,

@@ -62,19 +62,8 @@ export function TimelineGrid({
           key={`line-${index}`}
           className={classes.gridLine}
           style={{
-            left: col.x,
+            left: col.x - 1,
             height: totalHeight,
-          }}
-        />
-      ))}
-
-      {/* Row separator lines */}
-      {Array.from({ length: rowCount }).map((_, index) => (
-        <div
-          key={`row-${index}`}
-          className={classes.rowLine}
-          style={{
-            top: (index + 1) * rowHeight,
           }}
         />
       ))}

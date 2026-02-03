@@ -1,11 +1,11 @@
 import React from 'react';
-import { Gantt, type GanttTask } from 'mantine-gantt';
+import { Gantt, GanttTask } from 'mantine-gantt';
 import { MantineDemo } from '@mantinex/demo';
 
 const code = `
-import { Gantt, type GanttTask } from 'mantine-gantt';
+import { Gantt, GanttTask } from 'mantine-gantt';
 
-const mockTasks: GanttTask[] =  [
+const mockTasks: GanttTask[] = [
   {
     id: '1',
     label: 'Project Planning',
@@ -96,7 +96,7 @@ const mockTasks: GanttTask[] =  [
 ];
 
 function Demo() {
-  return <Gantt tasks={mockTasks} taskListWidth={400} />;
+  return <Gantt tasks={mockTasks} {{props}} />;
 }
 `;
 
@@ -190,13 +190,17 @@ const mockTasks: GanttTask[] = [
   },
 ];
 
-function Demo() {
-  return <Gantt tasks={mockTasks} taskListWidth={400} />;
+function Wrapper(props: any) {
+  return <Gantt tasks={mockTasks} {...props} />;
 }
 
-export const usage: MantineDemo = {
-  type: 'code',
-  component: Demo,
+export const configurator: MantineDemo = {
+  type: 'configurator',
+  component: Wrapper,
   code,
   centered: true,
+  controls: [
+    { type: 'color', prop: 'color', initialValue: 'blue', libraryValue: null },
+    { type: 'string', prop: 'label', initialValue: 'test-component', libraryValue: '__' },
+  ],
 };

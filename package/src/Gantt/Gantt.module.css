@@ -68,10 +68,6 @@
   background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
 }
 
-.taskListRow:last-child {
-  border-bottom: none;
-}
-
 .taskListCell {
   display: flex;
   align-items: center;
@@ -139,6 +135,10 @@
   color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
 }
 
+.timelineHeaderCell:last-child {
+  border-right: none;
+}
+
 .timelineHeaderCell[data-weekend] {
   background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-7));
 }
@@ -173,10 +173,34 @@
   min-width: 0;
 }
 
+.weekHeaderCell:last-child {
+  border-right: none;
+}
+
 .timelineBody {
   flex: 1;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: scroll;
+  scrollbar-width: none; /* Hide vertical scrollbar - synced via task list */
   position: relative;
+}
+
+.timelineBody::-webkit-scrollbar {
+  height: 12px; /* Only show horizontal scrollbar */
+  width: 0; /* Hide vertical scrollbar */
+}
+
+.timelineBody::-webkit-scrollbar-track {
+  background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6));
+}
+
+.timelineBody::-webkit-scrollbar-thumb {
+  background: light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-4));
+  border-radius: 6px;
+}
+
+.timelineBody::-webkit-scrollbar-thumb:hover {
+  background: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
 }
 
 .timelineContent {
@@ -199,14 +223,14 @@
 .weekendBackground {
   position: absolute;
   top: 0;
-  background-color: light-dark(rgba(0, 0, 0, 0.03), rgba(255, 255, 255, 0.02));
+  background-color: light-dark(rgb(0, 0, 0, 0.03), rgb(255, 255, 255, 0.02));
 }
 
 .gridLine {
   position: absolute;
   top: 0;
   width: 1px;
-  background-color: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.08));
+  background-color: light-dark(rgb(0, 0, 0, 0.08), rgb(255, 255, 255, 0.08));
 }
 
 .rowLine {
@@ -237,7 +261,8 @@
    ============================================ */
 .taskBar {
   position: absolute;
-  height: 28px;
+  /* Height is rowHeight - 16px padding (8px top + 8px bottom) */
+  height: calc(var(--gantt-row-height) - 16px);
   top: 8px;
   border-radius: var(--mantine-radius-sm);
   background-color: var(--task-bar-color, var(--mantine-primary-color-filled));
@@ -249,6 +274,7 @@
   user-select: none;
   touch-action: none;
   z-index: 10;
+  will-change: left, width;
 }
 
 .taskBar:hover {
@@ -268,7 +294,7 @@
   left: 0;
   top: 0;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.15);
+  background-color: rgb(0, 0, 0, 0.15);
   border-radius: var(--mantine-radius-sm) 0 0 var(--mantine-radius-sm);
   pointer-events: none;
 }
@@ -300,7 +326,7 @@
   justify-content: center;
   opacity: 0;
   transition: opacity 150ms ease;
-  background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.1));
+  background: linear-gradient(to right, transparent, rgb(0, 0, 0, 0.1));
 }
 
 .taskBar:hover .resizeHandle {
@@ -311,8 +337,8 @@
   content: '';
   width: 3px;
   height: 14px;
-  border-left: 1px solid rgba(255, 255, 255, 0.5);
-  border-right: 1px solid rgba(255, 255, 255, 0.5);
+  border-left: 1px solid rgb(255, 255, 255, 0.5);
+  border-right: 1px solid rgb(255, 255, 255, 0.5);
 }
 
 .resizeHandleLeft {
@@ -327,7 +353,7 @@
   justify-content: center;
   opacity: 0;
   transition: opacity 150ms ease;
-  background: linear-gradient(to left, transparent, rgba(0, 0, 0, 0.1));
+  background: linear-gradient(to left, transparent, rgb(0, 0, 0, 0.1));
   z-index: 2;
 }
 
@@ -339,8 +365,8 @@
   content: '';
   width: 3px;
   height: 14px;
-  border-left: 1px solid rgba(255, 255, 255, 0.5);
-  border-right: 1px solid rgba(255, 255, 255, 0.5);
+  border-left: 1px solid rgb(255, 255, 255, 0.5);
+  border-right: 1px solid rgb(255, 255, 255, 0.5);
 }
 
 /* ============================================
