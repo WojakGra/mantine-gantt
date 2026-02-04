@@ -164,10 +164,10 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   // Handle drag move - update delta for live link updates
   const handleDragMove = useCallback(
     (event: DragMoveEvent) => {
-      const snappedDelta = snapToGrid(event.delta.x, columnWidth);
+      const snappedDelta = snapToGrid(event.delta.x, effectiveColumnWidth);
       setDragDelta(snappedDelta);
     },
-    [columnWidth]
+    [effectiveColumnWidth]
   );
 
   // Handle drag end - apply the final delta or create link
@@ -221,8 +221,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
       }
 
       // Snap delta to grid
-      const snappedDelta = snapToGrid(delta.x, columnWidth);
-      const daysDelta = Math.round(snappedDelta / columnWidth);
+      const snappedDelta = snapToGrid(delta.x, effectiveColumnWidth);
+      const daysDelta = Math.round(snappedDelta / effectiveColumnWidth);
 
       // Only update if there was a change
       if (daysDelta !== 0) {
@@ -280,7 +280,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
         setDragDelta(0);
       }
     },
-    [columnWidth, onTaskUpdate, onLinkCreate]
+    [effectiveColumnWidth, onTaskUpdate, onLinkCreate]
   );
 
   // Calculate today line position

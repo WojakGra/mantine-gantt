@@ -30,6 +30,8 @@ function TaskBarComponent({
 
   // Track if we were just dragging to prevent flicker
   const wasDraggingRef = useRef(false);
+  const lastBaseLeftRef = useRef<number | null>(null);
+  const lastSnappedDeltaRef = useRef(0);
 
   // Calculate base position and width from task data
   const baseLeft = dateToPixel(task.startDate, startDate, columnWidth);
@@ -109,10 +111,28 @@ function TaskBarComponent({
     const snappedDelta = snapToGrid(moveTransform.x, columnWidth);
     visualLeft = baseLeft + snappedDelta;
     wasDraggingRef.current = true;
+    lastSnappedDeltaRef.current = snappedDelta;
+    lastBaseLeftRef.current = baseLeft;
   } else if (wasDraggingRef.current) {
-    // Just stopped dragging - use baseLeft (state has updated)
-    // Clear the flag after this render
-    wasDraggingRef.current = false;
+    // moveTransform is null - check if we should still show dragged position
+    if (!isDragging) {
+      // Global drag state is cleared - check if task data has updated
+      if (lastBaseLeftRef.current !== null && baseLeft !== lastBaseLeftRef.current) {
+        // Task data updated, reset
+        wasDraggingRef.current = false;
+        lastSnappedDeltaRef.current = 0;
+        lastBaseLeftRef.current = null;
+      } else {
+        // Task data hasn't updated yet, keep showing dragged position
+        visualLeft = baseLeft + lastSnappedDeltaRef.current;
+      }
+    } else {
+      // Still dragging globally but this task's transform is null - just use base
+      // This happens when drag ends and resets
+      wasDraggingRef.current = false;
+      lastSnappedDeltaRef.current = 0;
+      lastBaseLeftRef.current = null;
+    }
   }
 
   if (resizeEndTransform) {
