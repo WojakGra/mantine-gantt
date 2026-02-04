@@ -472,7 +472,23 @@ export function VariableDurations() {
 export function WithHoverTitle() {
   return (
     <div style={{ padding: 20, height: 600 }}>
-      <Gantt tasks={mockTasks} showTitle columnWidth={60} />
+      <Gantt tasks={mockTasks} showTitle />
+    </div>
+  );
+}
+
+export function WeekView() {
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt tasks={mockTasks} viewMode="week" />
+    </div>
+  );
+}
+
+export function MonthView() {
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt tasks={mockTasks} viewMode="month" />
     </div>
   );
 }

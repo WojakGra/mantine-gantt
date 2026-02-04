@@ -1,39 +1,165 @@
-# Mantine Extension Template
+# Mantine Gantt
 
-This is a template repository for creating Mantine extensions. It includes all necessary configuration files and scripts to get you started.
+A fully-featured Gantt chart component for [Mantine](https://mantine.dev/). Built with React, TypeScript, and integrates seamlessly with the Mantine ecosystem.
 
-## Get started
+[![npm version](https://img.shields.io/npm/v/mantine-gantt.svg)](https://www.npmjs.com/package/mantine-gantt)
+[![npm downloads](https://img.shields.io/npm/dm/mantine-gantt.svg)](https://www.npmjs.com/package/mantine-gantt)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-1. Click "Use this template" button at the top of the page to create a new repository based on this template.
-2. Clone the repository to your local machine and install dependencies (`yarn`)
-3. Run `nvm use` to switch to the correct node version
-4. Come up with a name for your extension and replace all occurrences of `mantine-extension-template` with your extension name
-5. Change `repository` field in [package/package.json](https://github.com/mantinedev/extension-template/blob/master/package/package.json) to point to your repository
-6. Run `npm run docgen` to generate files required for documentation
-7. To verify that everything works correctly, run `npm run build` and `npm test` to build and test your initial setup
-8. All good! Start developing your extension.
+## Features
 
-## Local development
+- 📊 **Interactive Timeline** - Drag tasks to reschedule, resize to change duration
+- 🔗 **Dependency Links** - Visual dependency arrows between tasks with interactive creation
+- 🎨 **Mantine Integration** - Full support for Mantine's styling API, themes, and CSS variables
+- 📱 **Responsive** - Works across different screen sizes with customizable column widths
+- ♿ **Accessible** - Keyboard navigation and ARIA attributes for screen readers
+- 🎯 **TypeScript** - Full type definitions included
 
-To develop your extension locally, run the following commands:
+## Installation
 
-- Run `npm run storybook` to start the storybook
-- Run `npm run dev` to start the documentation
-- To regenerate props documentation, run `npm run docgen`
+```bash
+npm install mantine-gantt @mantine/core @mantine/hooks dayjs
+# or
+yarn add mantine-gantt @mantine/core @mantine/hooks dayjs
+```
 
-## Publishing package
+## Quick Start
 
-1. Login with your npm account by running `npm login`, if you have 2FA enabled, [generate automation token](https://docs.npmjs.com/creating-and-viewing-access-tokens) and add it to your `~/.npmrc` file
-2. Make sure that your package name is unique and does not exist on npm yet
-3. Run `npm run release:patch`, `npm run release:minor` or `npm run release:major` to publish new version of your package
+```tsx
+import { Gantt, GanttTask } from 'mantine-gantt';
 
-## Publish documentation
+import 'mantine-gantt/styles.css';
 
-By default, the documentation is deployed to GitHub Pages. The script to deploy documentation runs automatically when the package is published. In order for
-this script to work correctly, you need to make sure that `repository` field in [package/package.json](https://github.com/mantinedev/extension-template/blob/master/package/package.json) points to your repository.
+const tasks: GanttTask[] = [
+  {
+    id: '1',
+    label: 'Project Planning',
+    startDate: '2026-02-01',
+    duration: 5,
+    progress: 100,
+  },
+  {
+    id: '2',
+    label: 'Development',
+    startDate: '2026-02-06',
+    duration: 10,
+    progress: 50,
+    dependencies: ['1'],
+    color: 'teal',
+  },
+];
 
-To publish documentation manually, run `npm run docs:deploy`.
+function App() {
+  return <Gantt tasks={tasks} />;
+}
+```
 
-## README file of your extension
+## Props
 
-`README.md` file at the root repository directory (file that you are currently reading) is copied to to `package/README.md` during the build process to avoid duplication. To add content to the README file of your extension, remove extension template documentation from this file and add your own content.
+| Prop            | Type                 | Default  | Description                            |
+| --------------- | -------------------- | -------- | -------------------------------------- |
+| `tasks`         | `GanttTask[]`        | Required | Array of tasks to display              |
+| `columnWidth`   | `number`             | `40`     | Width of each day column in pixels     |
+| `rowHeight`     | `number`             | `44`     | Height of each task row in pixels      |
+| `taskListWidth` | `number`             | `320`    | Width of the task list panel in pixels |
+| `showTitle`     | `boolean`            | `false`  | Show task title on hover               |
+| `startDate`     | `Date`               | Auto     | Start date of the timeline             |
+| `endDate`       | `Date`               | Auto     | End date of the timeline               |
+| `onTaskUpdate`  | `(task) => void`     | -        | Callback when a task is updated        |
+| `onTaskClick`   | `(task) => void`     | -        | Callback when a task is clicked        |
+| `onLinkCreate`  | `(from, to) => void` | -        | Callback when a dependency is created  |
+
+## Task Object
+
+```tsx
+interface GanttTask {
+  id: string;
+  label: string;
+  startDate: string; // ISO date string
+  duration: number; // Days
+  progress: number; // 0-100
+  dependencies?: string[]; // IDs of dependent tasks
+  color?: MantineColor;
+}
+```
+
+## Styling
+
+The Gantt component supports Mantine's Styles API:
+
+```tsx
+<Gantt
+  tasks={tasks}
+  classNames={{
+    root: 'my-gantt',
+    taskBar: 'my-task-bar',
+  }}
+  styles={{
+    taskBar: { borderRadius: '8px' },
+  }}
+/>
+```
+
+### Available Selectors
+
+- `root` - Main container
+- `taskList` - Left panel with task names
+- `taskListHeader` - Header of task list
+- `taskListBody` - Body of task list
+- `taskListRow` - Individual task row
+- `taskListCell` - Cell in task list
+- `timeline` - Right panel with chart
+- `timelineHeader` - Timeline header with dates
+- `timelineBody` - Timeline body with bars
+- `timelineRow` - Row in timeline
+- `taskBar` - Task bar element
+- `taskBarProgress` - Progress indicator
+- `taskBarLabel` - Task label
+
+## Examples
+
+### Compact View
+
+```tsx
+<Gantt tasks={tasks} columnWidth={25} rowHeight={32} />
+```
+
+### Wide View
+
+```tsx
+<Gantt tasks={tasks} columnWidth={80} rowHeight={60} />
+```
+
+### With Callbacks
+
+```tsx
+<Gantt
+  tasks={tasks}
+  onTaskUpdate={(task) => console.log('Updated:', task)}
+  onTaskClick={(task) => console.log('Clicked:', task)}
+  onLinkCreate={(from, to) => console.log('Link:', from, '->', to)}
+/>
+```
+
+## Development
+
+```bash
+# Install dependencies
+yarn
+
+# Update documentation
+npm run docgen
+
+# Start Storybook
+npm run storybook
+
+# Run tests
+npm run test
+
+# Build
+npm run build
+```
+
+## License
+
+MIT © [WojakGra](https://github.com/WojakGra)

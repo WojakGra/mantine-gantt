@@ -2,7 +2,7 @@
   "name": "mantine-gantt",
   "version": "0.0.3",
   "description": "A gantt chart component for mantine",
-  "homepage": "https://github.com/WojakGra/mantine-gantt#readme",
+  "homepage": "https://wojakgra.github.io/mantine-gantt",
   "packageManager": "yarn@4.0.1",
   "license": "MIT",
   "author": "Jakub Wojdziak <jakub@wojak.works>",

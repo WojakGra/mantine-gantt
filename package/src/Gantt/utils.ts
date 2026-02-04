@@ -1,5 +1,8 @@
 import dayjs, { Dayjs } from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
 import type { GanttTask } from './types';
+
+dayjs.extend(isoWeek);
 
 /**
  * Convert a date to pixel position relative to timeline start
@@ -72,8 +75,8 @@ export function generateDayHeaders(
 export function generateWeekHeaders(
   startDate: Dayjs,
   endDate: Dayjs
-): Array<{ startDate: Dayjs; endDate: Dayjs; label: string; days: number }> {
-  const weeks: Array<{ startDate: Dayjs; endDate: Dayjs; label: string; days: number }> = [];
+): Array<{ startDate: Dayjs; endDate: Dayjs; label: string; days: number; weekNumber: number }> {
+  const weeks: Array<{ startDate: Dayjs; endDate: Dayjs; label: string; days: number; weekNumber: number }> = [];
   let current = startDate.startOf('week');
 
   while (current.isBefore(endDate)) {
@@ -82,23 +85,18 @@ export function generateWeekHeaders(
     const actualStart = current.isBefore(startDate) ? startDate : current;
     const days = actualEnd.diff(actualStart, 'day') + 1;
 
-    // Format label based on number of days
-    let label: string;
-    if (days === 1) {
-      label = actualStart.format('MMM D');
-    } else if (actualStart.month() === actualEnd.month()) {
-      // Same month: "Jan 1-7"
-      label = `${actualStart.format('MMM D')}-${actualEnd.format('D')}`;
-    } else {
-      // Different months: "Jan 28 - Feb 3"
-      label = `${actualStart.format('MMM D')} - ${actualEnd.format('MMM D')}`;
-    }
+    // Format label as just month abbreviation
+    const label = actualStart.format('MMM');
+    
+    // Get ISO week number
+    const weekNumber = current.isoWeek();
 
     weeks.push({
       startDate: actualStart,
       endDate: actualEnd,
       label,
       days,
+      weekNumber,
     });
     current = current.add(1, 'week');
   }

@@ -84,6 +84,9 @@ export interface GanttBaseProps {
 
   /** Whether to show task titles on hover, default false */
   showTitle?: boolean;
+
+  /** Whether to show today marker line, default true */
+  showTodayMarker?: boolean;
 }
 
 export type GanttFactory = Factory<{

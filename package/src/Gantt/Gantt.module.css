@@ -233,6 +233,13 @@
   background-color: light-dark(rgb(0, 0, 0, 0.08), rgb(255, 255, 255, 0.08));
 }
 
+.majorGridLine {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  background-color: light-dark(rgb(0, 0, 0, 0.2), rgb(255, 255, 255, 0.15));
+}
+
 .rowLine {
   position: absolute;
   left: 0;

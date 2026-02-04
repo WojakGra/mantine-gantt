@@ -25,6 +25,8 @@ const defaultProps: Partial<GanttProps> = {
   columnWidth: 40,
   rowHeight: 44,
   taskListWidth: 320,
+  showTitle: false,
+  showTodayMarker: true,
   viewMode: 'day',
 };
 
@@ -52,9 +54,11 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     onTaskUpdate,
     onTaskClick,
     onLinkCreate,
-    columnWidth = 40,
-    rowHeight = 44,
-    showTitle = false,
+    columnWidth,
+    rowHeight,
+    taskListWidth,
+    showTitle,
+    showTodayMarker,
     startDate,
     endDate,
     viewMode,
@@ -73,6 +77,21 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     vars,
     varsResolver,
   });
+
+  // Calculate effective column width based on viewMode
+  // Week view: narrower columns to show more days
+  // Month view: even narrower to show more time range
+  const effectiveColumnWidth = useMemo(() => {
+    switch (viewMode) {
+      case 'month':
+        return Math.max(columnWidth / 6, 7); // Each day is 1/6th, min 7px
+      case 'week':
+        return Math.max(columnWidth / 2, 14); // Each day is 1/2nd, min 14px
+      case 'day':
+      default:
+        return columnWidth;
+    }
+  }, [viewMode, columnWidth]);
 
   // Internal state for tasks
   const [tasks, setTasks] = useState<GanttTask[]>(initialTasks);
@@ -97,7 +116,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
   // Calculate total timeline width
   const totalDays = bounds.end.diff(bounds.start, 'day') + 1;
-  const timelineWidth = totalDays * columnWidth;
+  const timelineWidth = totalDays * effectiveColumnWidth;
 
   // Refs for scroll synchronization
   const timelineBodyRef = useRef<HTMLDivElement>(null);
@@ -266,8 +285,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
   // Calculate today line position
   const today = dayjs();
-  const todayPosition = dateToPixel(today, bounds.start, columnWidth);
-  const showTodayLine = today.isAfter(bounds.start) && today.isBefore(bounds.end);
+  const todayPosition = dateToPixel(today, bounds.start, effectiveColumnWidth);
+  const showTodayLine = showTodayMarker && today.isAfter(bounds.start) && today.isBefore(bounds.end);
 
   return (
     <Box ref={ref} {...getStyles('root')} {...others}>
@@ -285,9 +304,10 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
           <TimelineHeader
             startDate={bounds.start}
             endDate={bounds.end}
-            columnWidth={columnWidth}
+            columnWidth={effectiveColumnWidth}
             getStyles={getStyles}
             totalWidth={timelineWidth}
+            viewMode={viewMode}
           />
         </div>
 
@@ -305,10 +325,11 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
               <TimelineGrid
                 startDate={bounds.start}
                 endDate={bounds.end}
-                columnWidth={columnWidth}
+                columnWidth={effectiveColumnWidth}
                 rowCount={tasks.length}
                 rowHeight={rowHeight}
                 getStyles={getStyles}
+                viewMode={viewMode}
               />
 
               {/* Today line */}
@@ -318,17 +339,16 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
               {/* Task rows with bars */}
               {tasks.map((task, index) => (
-                <div key={task.id} {...getStyles('timelineRow')} style={{ top: index * rowHeight }}>
+                <div key={task.id} {...getStyles('timelineRow')} title={showTitle ? task.label : undefined} style={{ top: index * rowHeight }}>
                   <TaskBar
                     key={`taskbar-${task.id}`}
                     task={task}
                     startDate={bounds.start}
-                    columnWidth={columnWidth}
+                    columnWidth={effectiveColumnWidth}
                     getStyles={getStyles}
                     isDragging={activeDragId === task.id}
                     isLinkDragging={activeDragType === 'link'}
                     linkSourceId={activeDragType === 'link' ? activeDragId : null}
-                    showTitle={showTitle}
                     onClick={() => onTaskClick?.(task)}
                   />
                 </div>
@@ -338,7 +358,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
               <DependencyLinks
                 tasks={tasks}
                 startDate={bounds.start}
-                columnWidth={columnWidth}
+                columnWidth={effectiveColumnWidth}
                 rowHeight={rowHeight}
                 activeDragId={activeDragId}
                 activeDragType={activeDragType}

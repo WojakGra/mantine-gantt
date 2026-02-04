@@ -13,7 +13,6 @@ interface TaskBarProps {
   isDragging?: boolean;
   isLinkDragging?: boolean;
   linkSourceId?: string | null;
-  showTitle?: boolean;
   onClick?: () => void;
 }
 
@@ -25,7 +24,6 @@ function TaskBarComponent({
   isDragging,
   isLinkDragging,
   linkSourceId,
-  showTitle,
   onClick,
 }: TaskBarProps) {
   const theme = useMantineTheme();
@@ -134,6 +132,8 @@ function TaskBarComponent({
       {...getStyles('taskBar')}
       {...moveAttributes}
       {...moveListeners}
+      role="button"
+      tabIndex={0}
       data-dragging={isDragging || undefined}
       data-link-target={showLinkTarget || undefined}
       style={{
@@ -142,6 +142,12 @@ function TaskBarComponent({
         ['--task-bar-color' as string]: barColor,
       }}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
     >
       {/* Left resize handle */}
       <div
@@ -149,14 +155,18 @@ function TaskBarComponent({
         {...getStyles('resizeHandleLeft')}
         {...resizeStartAttributes}
         {...resizeStartListeners}
+        role="button"
+        tabIndex={-1}
+        aria-label="Resize task start"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       />
 
       {/* Progress indicator */}
       <div {...getStyles('taskBarProgress')} style={{ width: `${task.progress}%` }} />
 
       {/* Label */}
-      <span {...getStyles('taskBarLabel')} title={showTitle ? task.label : undefined}>
+      <span {...getStyles('taskBarLabel')} >
         {task.label}
       </span>
 
@@ -166,7 +176,11 @@ function TaskBarComponent({
         {...getStyles('resizeHandle')}
         {...resizeEndAttributes}
         {...resizeEndListeners}
+        role="button"
+        tabIndex={-1}
+        aria-label="Resize task end"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       />
 
       {/* Link connector (right side) */}
@@ -175,11 +189,15 @@ function TaskBarComponent({
         {...getStyles('linkConnector')}
         {...linkAttributes}
         {...linkListeners}
+        role="button"
+        tabIndex={-1}
+        aria-label="Create dependency link"
         onPointerDown={(e) => {
           e.stopPropagation();
           (linkListeners as any)?.onPointerDown?.(e);
         }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       />
     </div>
   );
@@ -198,7 +216,6 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.isDragging === nextProps.isDragging &&
     prevProps.isLinkDragging === nextProps.isLinkDragging &&
     prevProps.linkSourceId === nextProps.linkSourceId &&
-    prevProps.showTitle === nextProps.showTitle &&
     prevProps.startDate.isSame(nextProps.startDate)
   );
 }
