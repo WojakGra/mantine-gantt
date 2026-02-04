@@ -95,13 +95,13 @@ describe('@mantine/gantt/Gantt', () => {
 
   it('renders showTitle attribute when enabled', () => {
     const { container } = render(<Gantt tasks={mockTasks} showTitle />);
-    const labels = container.querySelectorAll('[class*="taskBarLabel"]');
+    const labels = container.querySelectorAll('[class*="timelineRow"]');
     expect(labels[0]).toHaveAttribute('title', 'Project Planning');
   });
 
   it('does not render title attribute when showTitle is disabled', () => {
     const { container } = render(<Gantt tasks={mockTasks} showTitle={false} />);
-    const labels = container.querySelectorAll('[class*="taskBarLabel"]');
+    const labels = container.querySelectorAll('[class*="timelineRow"]');
     expect(labels[0]).not.toHaveAttribute('title');
   });
 });
