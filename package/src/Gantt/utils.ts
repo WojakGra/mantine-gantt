@@ -76,7 +76,13 @@ export function generateWeekHeaders(
   startDate: Dayjs,
   endDate: Dayjs
 ): Array<{ startDate: Dayjs; endDate: Dayjs; label: string; days: number; weekNumber: number }> {
-  const weeks: Array<{ startDate: Dayjs; endDate: Dayjs; label: string; days: number; weekNumber: number }> = [];
+  const weeks: Array<{
+    startDate: Dayjs;
+    endDate: Dayjs;
+    label: string;
+    days: number;
+    weekNumber: number;
+  }> = [];
   let current = startDate.startOf('week');
 
   while (current.isBefore(endDate)) {
@@ -87,7 +93,7 @@ export function generateWeekHeaders(
 
     // Format label as just month abbreviation
     const label = actualStart.format('MMM');
-    
+
     // Get ISO week number
     const weekNumber = current.isoWeek();
 

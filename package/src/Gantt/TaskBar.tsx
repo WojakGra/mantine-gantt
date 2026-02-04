@@ -186,9 +186,7 @@ function TaskBarComponent({
       <div {...getStyles('taskBarProgress')} style={{ width: `${task.progress}%` }} />
 
       {/* Label */}
-      <span {...getStyles('taskBarLabel')} >
-        {task.label}
-      </span>
+      <span {...getStyles('taskBarLabel')}>{task.label}</span>
 
       {/* Right resize handle */}
       <div

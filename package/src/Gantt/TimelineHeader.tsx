@@ -57,7 +57,7 @@ export function TimelineHeader({
             <div
               key={index}
               className={classes.weekHeaderCell}
-              style={{ 
+              style={{
                 width: month.days * columnWidth,
                 height: '100%',
                 alignItems: 'center',

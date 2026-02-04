@@ -286,7 +286,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   // Calculate today line position
   const today = dayjs();
   const todayPosition = dateToPixel(today, bounds.start, effectiveColumnWidth);
-  const showTodayLine = showTodayMarker && today.isAfter(bounds.start) && today.isBefore(bounds.end);
+  const showTodayLine =
+    showTodayMarker && today.isAfter(bounds.start) && today.isBefore(bounds.end);
 
   return (
     <Box ref={ref} {...getStyles('root')} {...others}>
@@ -339,7 +340,12 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
               {/* Task rows with bars */}
               {tasks.map((task, index) => (
-                <div key={task.id} {...getStyles('timelineRow')} title={showTitle ? task.label : undefined} style={{ top: index * rowHeight }}>
+                <div
+                  key={task.id}
+                  {...getStyles('timelineRow')}
+                  title={showTitle ? task.label : undefined}
+                  style={{ top: index * rowHeight }}
+                >
                   <TaskBar
                     key={`taskbar-${task.id}`}
                     task={task}
