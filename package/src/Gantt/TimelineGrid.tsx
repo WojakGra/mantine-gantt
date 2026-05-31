@@ -2,7 +2,6 @@ import type { Dayjs } from 'dayjs';
 import React, { useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
 import type { GanttFactory } from './types';
-import classes from './Gantt.module.css';
 
 interface TimelineGridProps {
   startDate: Dayjs;
@@ -20,6 +19,7 @@ export function TimelineGrid({
   columnWidth,
   rowCount,
   rowHeight,
+  getStyles,
   viewMode,
 }: TimelineGridProps) {
   // Generate day-based grid data (always needed for positioning)
@@ -93,7 +93,7 @@ export function TimelineGrid({
   }, [viewMode, monthSeparators, weekSeparators]);
 
   return (
-    <div className={classes.timelineGrid} style={{ height: totalHeight }}>
+    <div {...getStyles('timelineGrid', { style: { height: totalHeight } })}>
       {/* Weekend backgrounds (only in day view) */}
       {viewMode === 'day' &&
         dayGridData
@@ -101,12 +101,9 @@ export function TimelineGrid({
           .map((col, index) => (
             <div
               key={`weekend-${index}`}
-              className={classes.weekendBackground}
-              style={{
-                left: col.x,
-                width: columnWidth,
-                height: totalHeight,
-              }}
+              {...getStyles('weekendBackground', {
+                style: { left: col.x, width: columnWidth, height: totalHeight },
+              })}
             />
           ))}
 
@@ -114,11 +111,7 @@ export function TimelineGrid({
       {gridLines.map((x, index) => (
         <div
           key={`line-${index}`}
-          className={classes.gridLine}
-          style={{
-            left: x - 1,
-            height: totalHeight,
-          }}
+          {...getStyles('gridLine', { style: { left: x - 1, height: totalHeight } })}
         />
       ))}
 
@@ -126,11 +119,7 @@ export function TimelineGrid({
       {majorGridLines.map((x, index) => (
         <div
           key={`major-${index}`}
-          className={classes.majorGridLine}
-          style={{
-            left: x - 1,
-            height: totalHeight,
-          }}
+          {...getStyles('majorGridLine', { style: { left: x - 1, height: totalHeight } })}
         />
       ))}
     </div>

@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragEndEvent,
@@ -20,6 +20,10 @@ import { TimelineHeader } from './TimelineHeader';
 import type { GanttFactory, GanttProps, GanttTask } from './types';
 import { calculateTimelineBounds, dateToPixel, snapToGrid } from './utils';
 import classes from './Gantt.module.css';
+
+// Right-side room kept ahead of the dragged bar; the END grows dynamically by this much
+// so dragging into the future is effectively unbounded.
+const DRAG_BUFFER_DAYS = 30;
 
 const defaultProps: Partial<GanttProps> = {
   columnWidth: 40,
@@ -100,6 +104,9 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     'move' | 'resize-end' | 'resize-start' | 'link' | null
   >(null);
   const [dragDelta, setDragDelta] = useState<number>(0);
+  // Visible width of the timeline body, so the grid/header can be extended to fill the
+  // screen even when the tasks span fewer days than the viewport.
+  const [viewportWidth, setViewportWidth] = useState(0);
 
   // Calculate timeline bounds
   const calculatedBounds = useMemo(
@@ -114,14 +121,57 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   }
   const bounds = stableBoundsRef.current;
 
-  // Calculate total timeline width
-  const totalDays = bounds.end.diff(bounds.start, 'day') + 1;
+  // Calculate total timeline width, extended to at least fill the visible viewport so
+  // there is no empty area to the right of the last column.
+  const fillDays = effectiveColumnWidth > 0 ? Math.ceil(viewportWidth / effectiveColumnWidth) : 0;
+  const totalDays = Math.max(bounds.end.diff(bounds.start, 'day') + 1, fillDays);
+  const displayEnd = bounds.start.add(totalDays - 1, 'day');
   const timelineWidth = totalDays * effectiveColumnWidth;
 
   // Refs for scroll synchronization
   const timelineBodyRef = useRef<HTMLDivElement>(null);
   const taskListBodyRef = useRef<HTMLDivElement>(null);
   const timelineHeaderRef = useRef<HTMLDivElement>(null);
+  const timelineContentRef = useRef<HTMLDivElement>(null);
+
+  // Pointer-driven MOVE positioning. We derive the dragged bar's position from the live
+  // pointer X relative to the timeline content rect, recomputed on both pointer-move and
+  // scroll. This is a single source of truth that follows the cursor through dnd-kit
+  // auto-scroll (whose transform does not track our scroll container) and makes the
+  // committed date identical to what is shown.
+  const [moveLeft, setMoveLeft] = useState<number | null>(null);
+  // Captured at drag start. grabOffsetX = where inside the bar (px) the pointer grabbed,
+  // so the bar doesn't snap its left edge to the cursor; duration drives end-extension.
+  const moveInfoRef = useRef<{ taskId: string; grabOffsetX: number; duration: number } | null>(
+    null
+  );
+  const lastClientXRef = useRef(0);
+  const moveDayIndexRef = useRef(0);
+
+  const recomputeMove = useCallback(() => {
+    const info = moveInfoRef.current;
+    const content = timelineContentRef.current;
+    if (!info || !content) {
+      return;
+    }
+    const rect = content.getBoundingClientRect();
+    const pointerContentX = lastClientXRef.current - rect.left;
+    // Day index of the bar's left edge, relative to the current timeline origin.
+    const dayIndex = Math.round((pointerContentX - info.grabOffsetX) / effectiveColumnWidth);
+
+    // Grow the timeline END (only) as the bar nears the right edge, so dragging far into
+    // the future always has room to auto-scroll. The origin (start) never moves during a
+    // drag — shifting it per-frame fights the scroll-compensation and runs away. Left-side
+    // room is reserved once at drag start (see handleDragStart).
+    const start = stableBoundsRef.current.start;
+    const neededEndDay = dayIndex + info.duration + DRAG_BUFFER_DAYS;
+    if (neededEndDay > stableBoundsRef.current.end.diff(start, 'day')) {
+      stableBoundsRef.current = { start, end: start.add(neededEndDay, 'day') };
+    }
+
+    moveDayIndexRef.current = dayIndex;
+    setMoveLeft(dayIndex * effectiveColumnWidth);
+  }, [effectiveColumnWidth]);
 
   // Sync scroll between task list and timeline
   const handleTimelineScroll = useCallback(() => {
@@ -132,6 +182,40 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     if (timelineBodyRef.current && timelineHeaderRef.current) {
       timelineHeaderRef.current.scrollLeft = timelineBodyRef.current.scrollLeft;
     }
+    // Keep the dragged bar under the cursor while (auto-)scrolling.
+    if (moveInfoRef.current) {
+      recomputeMove();
+    }
+  }, [recomputeMove]);
+
+  // Track the pointer during a move drag so the bar follows the cursor (and auto-scroll).
+  useEffect(() => {
+    if (activeDragType !== 'move' || !activeDragId) {
+      return undefined;
+    }
+    const onPointerMove = (e: PointerEvent) => {
+      lastClientXRef.current = e.clientX;
+      recomputeMove();
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    return () => window.removeEventListener('pointermove', onPointerMove);
+  }, [activeDragId, activeDragType, recomputeMove]);
+
+  // Measure the timeline body so the grid can be widened to fill the viewport.
+  useEffect(() => {
+    const node = timelineBodyRef.current;
+    if (!node) {
+      return undefined;
+    }
+    setViewportWidth(node.clientWidth);
+    if (typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    const observer = new ResizeObserver((entries) => {
+      setViewportWidth(entries[0].contentRect.width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
   }, []);
 
   const handleTaskListScroll = useCallback(() => {
@@ -139,6 +223,26 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
       timelineBodyRef.current.scrollTop = taskListBodyRef.current.scrollTop;
     }
   }, []);
+
+  // Keep the viewport visually pinned whenever the timeline origin (bounds.start)
+  // shifts — e.g. when freezing/expanding on drag start or re-tightening on drag end.
+  // A date at pixel (date - start) * columnWidth; if start moves by N days, every
+  // position shifts by N * columnWidth, so counter-scroll by the same amount.
+  const prevStartRef = useRef(bounds.start);
+  useLayoutEffect(() => {
+    const prev = prevStartRef.current;
+    if (!prev.isSame(bounds.start, 'day')) {
+      const deltaDays = bounds.start.diff(prev, 'day');
+      const px = -deltaDays * effectiveColumnWidth;
+      if (timelineBodyRef.current) {
+        timelineBodyRef.current.scrollLeft += px;
+      }
+      if (timelineHeaderRef.current) {
+        timelineHeaderRef.current.scrollLeft += px;
+      }
+      prevStartRef.current = bounds.start;
+    }
+  });
 
   // DnD sensors
   const sensors = useSensors(
@@ -150,20 +254,60 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   );
 
   // Handle drag start - track which task is being dragged and type
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    const { active } = event;
-    const data = active.data.current as {
-      type: 'move' | 'resize-end' | 'resize-start' | 'link';
-      taskId: string;
-    };
-    setActiveDragId(data.taskId);
-    setActiveDragType(data.type);
-    setDragDelta(0);
-  }, []);
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const { active } = event;
+      const data = active.data.current as {
+        type: 'move' | 'resize-end' | 'resize-start' | 'link';
+        taskId: string;
+      };
+      // For a move drag, capture where inside the bar the pointer grabbed (origin-
+      // invariant) BEFORE extending bounds, so the live pointer math stays correct.
+      if (data.type === 'move') {
+        const task = tasks.find((t) => t.id === data.taskId);
+        const content = timelineContentRef.current;
+        const pe = event.activatorEvent as PointerEvent;
+        if (task && content && typeof pe?.clientX === 'number') {
+          const baseLeft = dateToPixel(
+            task.startDate,
+            stableBoundsRef.current.start,
+            effectiveColumnWidth
+          );
+          const rect = content.getBoundingClientRect();
+          lastClientXRef.current = pe.clientX;
+          moveInfoRef.current = {
+            taskId: data.taskId,
+            grabOffsetX: pe.clientX - rect.left - baseLeft,
+            duration: task.duration,
+          };
+        }
+        // Don't position from the (pre-compensation) rect yet — leave moveLeft null so
+        // the bar renders at its base; the first pointermove drives recomputeMove.
+        setMoveLeft(null);
+      }
+
+      // Freeze the timeline for the drag and extend only the END (grows further
+      // dynamically). The origin (start) is never moved during a drag: shifting it would
+      // require scroll-compensation that snaps the viewport back on drop. Left-side room
+      // is therefore bounded by the timeline's normal start padding.
+      if (data.type !== 'link') {
+        stableBoundsRef.current = {
+          start: calculatedBounds.start,
+          end: calculatedBounds.end.add(DRAG_BUFFER_DAYS, 'day'),
+        };
+      }
+
+      setActiveDragId(data.taskId);
+      setActiveDragType(data.type);
+      setDragDelta(0);
+    },
+    [calculatedBounds, tasks, effectiveColumnWidth]
+  );
 
   // Handle drag move - update delta for live link updates
   const handleDragMove = useCallback(
     (event: DragMoveEvent) => {
+      // event.delta is dnd-kit's scrollAdjustedTranslate — already includes auto-scroll.
       const snappedDelta = snapToGrid(event.delta.x, effectiveColumnWidth);
       setDragDelta(snappedDelta);
     },
@@ -220,7 +364,38 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
         return;
       }
 
-      // Snap delta to grid
+      // Move: commit the pointer-derived day index (single source of truth shared with
+      // the visual), so the bar lands exactly where it was shown — including after
+      // auto-scroll.
+      if (data.type === 'move') {
+        const newStart = stableBoundsRef.current.start.add(moveDayIndexRef.current, 'day');
+        const current = tasks.find((t) => t.id === data.taskId);
+        const changed = !current || !dayjs(current.startDate).isSame(newStart, 'day');
+        flushSync(() => {
+          if (changed) {
+            setTasks((currentTasks) => {
+              const updatedTasks = currentTasks.map((task) =>
+                task.id === data.taskId
+                  ? { ...task, startDate: newStart.format('YYYY-MM-DD') }
+                  : task
+              );
+              const updatedTask = updatedTasks.find((t) => t.id === data.taskId);
+              if (updatedTask && onTaskUpdate) {
+                onTaskUpdate(updatedTask);
+              }
+              return updatedTasks;
+            });
+          }
+          moveInfoRef.current = null;
+          setMoveLeft(null);
+          setActiveDragId(null);
+          setActiveDragType(null);
+          setDragDelta(0);
+        });
+        return;
+      }
+
+      // Resize: snap dnd-kit's delta (scrollAdjustedTranslate already accounts for scroll).
       const snappedDelta = snapToGrid(delta.x, effectiveColumnWidth);
       const daysDelta = Math.round(snappedDelta / effectiveColumnWidth);
 
@@ -234,14 +409,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                 return task;
               }
 
-              if (data.type === 'move') {
-                // Move entire bar - update start date, keep duration
-                const newStartDate = dayjs(task.startDate).add(daysDelta, 'day');
-                return {
-                  ...task,
-                  startDate: newStartDate.format('YYYY-MM-DD'),
-                };
-              } else if (data.type === 'resize-end') {
+              if (data.type === 'resize-end') {
                 // Resize from end - keep start date, update duration
                 const newDuration = Math.max(1, task.duration + daysDelta);
                 return {
@@ -280,14 +448,14 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
         setDragDelta(0);
       }
     },
-    [effectiveColumnWidth, onTaskUpdate, onLinkCreate]
+    [effectiveColumnWidth, onTaskUpdate, onLinkCreate, tasks]
   );
 
   // Calculate today line position
   const today = dayjs();
   const todayPosition = dateToPixel(today, bounds.start, effectiveColumnWidth);
   const showTodayLine =
-    showTodayMarker && today.isAfter(bounds.start) && today.isBefore(bounds.end);
+    showTodayMarker && today.isAfter(bounds.start) && today.isBefore(displayEnd);
 
   return (
     <Box ref={ref} {...getStyles('root')} {...others}>
@@ -304,7 +472,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
         <div {...getStyles('timelineHeader')} ref={timelineHeaderRef}>
           <TimelineHeader
             startDate={bounds.start}
-            endDate={bounds.end}
+            endDate={displayEnd}
             columnWidth={effectiveColumnWidth}
             getStyles={getStyles}
             totalWidth={timelineWidth}
@@ -321,11 +489,12 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
           <div {...getStyles('timelineBody')} ref={timelineBodyRef} onScroll={handleTimelineScroll}>
             <div
               {...getStyles('timelineContent')}
+              ref={timelineContentRef}
               style={{ width: timelineWidth, height: tasks.length * rowHeight }}
             >
               <TimelineGrid
                 startDate={bounds.start}
-                endDate={bounds.end}
+                endDate={displayEnd}
                 columnWidth={effectiveColumnWidth}
                 rowCount={tasks.length}
                 rowHeight={rowHeight}
@@ -355,6 +524,9 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                     isDragging={activeDragId === task.id}
                     isLinkDragging={activeDragType === 'link'}
                     linkSourceId={activeDragType === 'link' ? activeDragId : null}
+                    overrideLeft={
+                      activeDragType === 'move' && activeDragId === task.id ? moveLeft : null
+                    }
                     onClick={() => onTaskClick?.(task)}
                   />
                 </div>
@@ -366,6 +538,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                 startDate={bounds.start}
                 columnWidth={effectiveColumnWidth}
                 rowHeight={rowHeight}
+                getStyles={getStyles}
                 activeDragId={activeDragId}
                 activeDragType={activeDragType}
                 dragDelta={dragDelta}
@@ -373,8 +546,10 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
             </div>
           </div>
 
-          {/* Drag overlay for link connector */}
-          <DragOverlay>
+          {/* Drag overlay for link connector. dropAnimation disabled: the default
+              animation hides the source bar (opacity:0) for 250ms while animating an
+              overlay clone — but move/resize use no overlay, so the bar would vanish. */}
+          <DragOverlay dropAnimation={null}>
             {activeDragType === 'link' && (
               <div
                 style={{

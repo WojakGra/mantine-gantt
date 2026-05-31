@@ -27,6 +27,7 @@ export type GanttStylesNames =
   | 'taskListCell'
   | 'timeline'
   | 'timelineHeader'
+  | 'timelineHeaderInner'
   | 'timelineHeaderRow'
   | 'timelineHeaderCell'
   | 'weekHeader'
@@ -36,12 +37,18 @@ export type GanttStylesNames =
   | 'timelineRow'
   | 'timelineGrid'
   | 'gridLine'
+  | 'majorGridLine'
+  | 'weekendBackground'
+  | 'todayLine'
   | 'taskBar'
   | 'taskBarLabel'
   | 'taskBarProgress'
   | 'resizeHandle'
   | 'resizeHandleLeft'
-  | 'linkConnector';
+  | 'linkConnector'
+  | 'dependencyLinks'
+  | 'dependencyLine'
+  | 'linkArrow';
 
 export type GanttCssVariables = {
   root:
@@ -102,9 +109,12 @@ export interface GanttProps
     ElementProps<'div', 'onChange'>,
     GanttBaseProps {}
 
+/** Kind of drag interaction encoded in active.data.current.type */
+export type GanttDragType = 'move' | 'resize-end' | 'resize-start' | 'link';
+
 /** Context for drag operations */
 export interface DragContext {
-  type: 'move' | 'resize';
+  type: GanttDragType;
   taskId: string;
   initialX: number;
 }

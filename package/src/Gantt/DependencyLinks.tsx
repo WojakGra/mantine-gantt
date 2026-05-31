@@ -1,16 +1,17 @@
 import type { Dayjs } from 'dayjs';
 import React, { useMemo } from 'react';
-import type { GanttTask } from './types';
+import type { GetStylesApi } from '@mantine/core';
+import type { GanttDragType, GanttFactory, GanttTask } from './types';
 import { dateToPixel, durationToPixels } from './utils';
-import classes from './Gantt.module.css';
 
 interface DependencyLinksProps {
   tasks: GanttTask[];
   startDate: Dayjs;
   columnWidth: number;
   rowHeight: number;
+  getStyles: GetStylesApi<GanttFactory>;
   activeDragId?: string | null;
-  activeDragType?: 'move' | 'resize-end' | 'resize-start' | 'link' | null;
+  activeDragType?: GanttDragType | null;
   dragDelta?: number;
 }
 
@@ -19,6 +20,7 @@ export function DependencyLinks({
   startDate,
   columnWidth,
   rowHeight,
+  getStyles,
   activeDragId,
   activeDragType,
   dragDelta = 0,
@@ -104,17 +106,17 @@ export function DependencyLinks({
   }
 
   return (
-    <svg className={classes.dependencyLinks}>
+    <svg {...getStyles('dependencyLinks')}>
       <defs>
         <marker id="dep-arrow" markerWidth="5" markerHeight="4" refX="4" refY="2" orient="auto">
-          <path d="M0,0 L5,2 L0,4 z" className={classes.linkArrow} />
+          <path d="M0,0 L5,2 L0,4 z" {...getStyles('linkArrow')} />
         </marker>
       </defs>
 
       {links.map((link) => (
         <polyline
           key={link.id}
-          className={classes.dependencyLine}
+          {...getStyles('dependencyLine')}
           points={link.points}
           markerEnd="url(#dep-arrow)"
         />

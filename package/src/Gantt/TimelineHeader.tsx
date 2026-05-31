@@ -3,7 +3,6 @@ import React, { useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
 import type { GanttFactory } from './types';
 import { generateDayHeaders, generateWeekHeaders } from './utils';
-import classes from './Gantt.module.css';
 
 interface TimelineHeaderProps {
   startDate: Dayjs;
@@ -18,6 +17,7 @@ export function TimelineHeader({
   startDate,
   endDate,
   columnWidth,
+  getStyles,
   totalWidth,
   viewMode,
 }: TimelineHeaderProps) {
@@ -50,18 +50,15 @@ export function TimelineHeader({
 
   if (viewMode === 'month') {
     return (
-      <div className={classes.timelineHeaderInner} style={{ width: totalWidth }}>
+      <div {...getStyles('timelineHeaderInner', { style: { width: totalWidth } })}>
         {/* Month row only - double height to span both rows */}
-        <div className={classes.weekHeader} style={{ height: '100%' }}>
+        <div {...getStyles('weekHeader', { style: { height: '100%' } })}>
           {monthHeaders.map((month, index) => (
             <div
               key={index}
-              className={classes.weekHeaderCell}
-              style={{
-                width: month.days * columnWidth,
-                height: '100%',
-                alignItems: 'center',
-              }}
+              {...getStyles('weekHeaderCell', {
+                style: { width: month.days * columnWidth, height: '100%', alignItems: 'center' },
+              })}
             >
               {month.label}
             </div>
@@ -73,14 +70,13 @@ export function TimelineHeader({
 
   if (viewMode === 'week') {
     return (
-      <div className={classes.timelineHeaderInner} style={{ width: totalWidth }}>
+      <div {...getStyles('timelineHeaderInner', { style: { width: totalWidth } })}>
         {/* Month row */}
-        <div className={classes.weekHeader}>
+        <div {...getStyles('weekHeader')}>
           {monthHeaders.map((month, index) => (
             <div
               key={index}
-              className={classes.weekHeaderCell}
-              style={{ width: month.days * columnWidth }}
+              {...getStyles('weekHeaderCell', { style: { width: month.days * columnWidth } })}
             >
               {month.label}
             </div>
@@ -88,12 +84,11 @@ export function TimelineHeader({
         </div>
 
         {/* Week number row */}
-        <div className={classes.timelineHeaderRow}>
+        <div {...getStyles('timelineHeaderRow')}>
           {weekHeaders.map((week, index) => (
             <div
               key={index}
-              className={classes.timelineHeaderCell}
-              style={{ width: week.days * columnWidth }}
+              {...getStyles('timelineHeaderCell', { style: { width: week.days * columnWidth } })}
             >
               Week {week.weekNumber}
             </div>
@@ -105,14 +100,13 @@ export function TimelineHeader({
 
   // Default: day view
   return (
-    <div className={classes.timelineHeaderInner} style={{ width: totalWidth }}>
+    <div {...getStyles('timelineHeaderInner', { style: { width: totalWidth } })}>
       {/* Month row */}
-      <div className={classes.weekHeader}>
+      <div {...getStyles('weekHeader')}>
         {monthHeaders.map((month, index) => (
           <div
             key={index}
-            className={classes.weekHeaderCell}
-            style={{ width: month.days * columnWidth }}
+            {...getStyles('weekHeaderCell', { style: { width: month.days * columnWidth } })}
           >
             {month.label}
           </div>
@@ -120,11 +114,11 @@ export function TimelineHeader({
       </div>
 
       {/* Day row */}
-      <div className={classes.timelineHeaderRow}>
+      <div {...getStyles('timelineHeaderRow')}>
         {dayHeaders.map((day, index) => (
           <div
             key={index}
-            className={classes.timelineHeaderCell}
+            {...getStyles('timelineHeaderCell')}
             data-weekend={day.isWeekend || undefined}
             data-today={day.date.isSame(today, 'day') || undefined}
           >

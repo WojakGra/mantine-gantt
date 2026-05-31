@@ -281,7 +281,7 @@
   user-select: none;
   touch-action: none;
   z-index: 10;
-  will-change: left, width;
+  will-change: left, width, transform;
 }
 
 .taskBar:hover {

@@ -1,9 +1,9 @@
 import type { Dayjs } from 'dayjs';
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { getThemeColor, useMantineTheme, type GetStylesApi } from '@mantine/core';
 import type { GanttFactory, GanttTask } from './types';
-import { dateToPixel, durationToPixels, snapToGrid } from './utils';
+import { dateToPixel, durationToPixels } from './utils';
 
 interface TaskBarProps {
   task: GanttTask;
@@ -13,6 +13,9 @@ interface TaskBarProps {
   isDragging?: boolean;
   isLinkDragging?: boolean;
   linkSourceId?: string | null;
+  /** Pointer-derived left (px) for an active move drag. When set, it positions the bar
+      instead of dnd-kit's transform, so it follows the cursor through auto-scroll. */
+  overrideLeft?: number | null;
   onClick?: () => void;
 }
 
@@ -24,14 +27,10 @@ function TaskBarComponent({
   isDragging,
   isLinkDragging,
   linkSourceId,
+  overrideLeft,
   onClick,
 }: TaskBarProps) {
   const theme = useMantineTheme();
-
-  // Track if we were just dragging to prevent flicker
-  const wasDraggingRef = useRef(false);
-  const lastBaseLeftRef = useRef<number | null>(null);
-  const lastSnappedDeltaRef = useRef(0);
 
   // Calculate base position and width from task data
   const baseLeft = dateToPixel(task.startDate, startDate, columnWidth);
@@ -103,47 +102,32 @@ function TaskBarComponent({
   // Show link target outline only when link is being dragged and hovering this task (not self)
   const showLinkTarget = isLinkDragging && isOver && linkSourceId !== task.id;
 
-  // Calculate visual position during drag
+  // Live drag geometry. The bar is positioned by `left`/`width` from task data; the
+  // active drag offset is applied as a CSS transform (for move) or by adjusting
+  // width/left (for resize). Using a CSS transform for move lets dnd-kit's own
+  // coordinate tracking — including auto-scroll — keep the bar under the cursor.
+  // Snapping to whole days happens on drop (handleDragEnd), so the drag itself is
+  // smooth and never diverges from the pointer.
+  let translateX = 0;
   let visualLeft = baseLeft;
   let visualWidth = baseWidth;
 
-  if (moveTransform) {
-    const snappedDelta = snapToGrid(moveTransform.x, columnWidth);
-    visualLeft = baseLeft + snappedDelta;
-    wasDraggingRef.current = true;
-    lastSnappedDeltaRef.current = snappedDelta;
-    lastBaseLeftRef.current = baseLeft;
-  } else if (wasDraggingRef.current) {
-    // moveTransform is null - check if we should still show dragged position
-    if (!isDragging) {
-      // Global drag state is cleared - check if task data has updated
-      if (lastBaseLeftRef.current !== null && baseLeft !== lastBaseLeftRef.current) {
-        // Task data updated, reset
-        wasDraggingRef.current = false;
-        lastSnappedDeltaRef.current = 0;
-        lastBaseLeftRef.current = null;
-      } else {
-        // Task data hasn't updated yet, keep showing dragged position
-        visualLeft = baseLeft + lastSnappedDeltaRef.current;
-      }
-    } else {
-      // Still dragging globally but this task's transform is null - just use base
-      // This happens when drag ends and resets
-      wasDraggingRef.current = false;
-      lastSnappedDeltaRef.current = 0;
-      lastBaseLeftRef.current = null;
-    }
+  if (overrideLeft != null) {
+    // Pointer-driven move: position directly, ignore dnd-kit's transform.
+    visualLeft = overrideLeft;
+  } else if (moveTransform) {
+    translateX = moveTransform.x;
   }
 
   if (resizeEndTransform) {
-    const snappedDelta = snapToGrid(resizeEndTransform.x, columnWidth);
-    visualWidth = Math.max(columnWidth, baseWidth + snappedDelta);
+    visualWidth = Math.max(columnWidth, baseWidth + resizeEndTransform.x);
   }
 
   if (resizeStartTransform) {
-    const snappedDelta = snapToGrid(resizeStartTransform.x, columnWidth);
-    visualLeft = baseLeft + snappedDelta;
-    visualWidth = Math.max(columnWidth, baseWidth - snappedDelta);
+    // Right edge stays put; left edge follows the cursor but can't cross it.
+    const delta = Math.min(resizeStartTransform.x, baseWidth - columnWidth);
+    visualLeft = baseLeft + delta;
+    visualWidth = baseWidth - delta;
   }
 
   return (
@@ -159,6 +143,7 @@ function TaskBarComponent({
       style={{
         left: visualLeft,
         width: visualWidth,
+        transform: translateX ? `translateX(${translateX}px)` : undefined,
         ['--task-bar-color' as string]: barColor,
       }}
       onClick={onClick}
@@ -234,6 +219,7 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.isDragging === nextProps.isDragging &&
     prevProps.isLinkDragging === nextProps.isLinkDragging &&
     prevProps.linkSourceId === nextProps.linkSourceId &&
+    prevProps.overrideLeft === nextProps.overrideLeft &&
     prevProps.startDate.isSame(nextProps.startDate)
   );
 }
