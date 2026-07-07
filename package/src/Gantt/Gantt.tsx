@@ -316,7 +316,9 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
             />
 
             {/* Today line */}
-            {showTodayLine && <div {...getStyles('todayLine', { style: { left: todayPosition } })} />}
+            {showTodayLine && (
+              <div {...getStyles('todayLine', { style: { left: todayPosition } })} />
+            )}
 
             {/* Task rows with bars */}
             {tasks.map((task, index) => (
