@@ -51,6 +51,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     styles,
     unstyled,
     vars,
+    attributes,
     tasks: initialTasks,
     columns,
     onTaskUpdate,
@@ -77,6 +78,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     styles,
     unstyled,
     vars,
+    attributes,
     varsResolver,
   });
 
@@ -314,7 +316,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
             />
 
             {/* Today line */}
-            {showTodayLine && <div className={classes.todayLine} style={{ left: todayPosition }} />}
+            {showTodayLine && <div {...getStyles('todayLine', { style: { left: todayPosition } })} />}
 
             {/* Task rows with bars */}
             {tasks.map((task, index) => (
