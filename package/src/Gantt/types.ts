@@ -109,12 +109,5 @@ export interface GanttProps
     ElementProps<'div', 'onChange'>,
     GanttBaseProps {}
 
-/** Kind of drag interaction encoded in active.data.current.type */
+/** Kind of drag interaction driven by useGanttDrag */
 export type GanttDragType = 'move' | 'resize-end' | 'resize-start' | 'link';
-
-/** Context for drag operations */
-export interface DragContext {
-  type: GanttDragType;
-  taskId: string;
-  initialX: number;
-}

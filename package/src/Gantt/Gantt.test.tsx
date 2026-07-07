@@ -1,7 +1,18 @@
 import React from 'react';
-import { fireEvent } from '@testing-library/react';
+import { act, fireEvent } from '@testing-library/react';
 import { render, screen } from '@mantine-tests/core';
 import { Gantt, GanttTask } from './index';
+
+// jsdom has no PointerEvent, so fireEvent.pointer* drops clientX. Dispatch a plain bubbling
+// Event with clientX attached — React reads nativeEvent.clientX and native listeners read it too.
+// Wrapped in act() so the resulting state updates (and onTaskUpdate) flush before assertions.
+function pointer(node: Element | Document, type: string, clientX: number) {
+  act(() => {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.assign(event, { clientX, clientY: 100 });
+    node.dispatchEvent(event);
+  });
+}
 
 const mockTasks: GanttTask[] = [
   {
@@ -86,6 +97,62 @@ describe('@mantine/gantt/Gantt', () => {
       fireEvent.click(firstTaskBar);
       expect(onTaskClick).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }));
     }
+  });
+
+  it('commits a pointer move drag as a new startDate', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={mockTasks} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    // Default columnWidth is 40px, so +40px snaps to +1 day.
+    pointer(bar, 'pointerdown', 100);
+    pointer(document, 'pointermove', 140);
+    pointer(document, 'pointerup', 140);
+
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', startDate: '2026-02-02' })
+    );
+  });
+
+  it('treats a pointerdown without movement as a click, not a drag', () => {
+    const onTaskUpdate = jest.fn();
+    const onTaskClick = jest.fn();
+    const { container } = render(
+      <Gantt tasks={mockTasks} onTaskUpdate={onTaskUpdate} onTaskClick={onTaskClick} />
+    );
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    pointer(bar, 'pointerdown', 100);
+    pointer(document, 'pointerup', 100);
+    fireEvent.click(bar);
+
+    expect(onTaskUpdate).not.toHaveBeenCalled();
+    expect(onTaskClick).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }));
+  });
+
+  it('moves a task by one day with the arrow keys', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={mockTasks} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', startDate: '2026-02-02' })
+    );
+  });
+
+  it('clamps keyboard resize so duration never drops below one day', () => {
+    const onTaskUpdate = jest.fn();
+    const oneDayTask: GanttTask[] = [
+      { id: '1', label: 'Tiny', startDate: '2026-02-01', duration: 1, progress: 0 },
+    ];
+    const { container } = render(<Gantt tasks={oneDayTask} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    fireEvent.keyDown(bar, { key: 'ArrowLeft', shiftKey: true });
+
+    expect(onTaskUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: '1', duration: 1 }));
   });
 
   it('renders with empty tasks array', () => {

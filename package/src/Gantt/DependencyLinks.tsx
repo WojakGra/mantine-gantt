@@ -12,7 +12,10 @@ interface DependencyLinksProps {
   getStyles: GetStylesApi<GanttFactory>;
   activeDragId?: string | null;
   activeDragType?: GanttDragType | null;
+  /** Continuous, scroll-adjusted px delta of the active move/resize drag. */
   dragDelta?: number;
+  /** Live link-creation line, in timelineContent coordinates. */
+  linkPreview?: { x1: number; y1: number; x2: number; y2: number } | null;
 }
 
 export function DependencyLinks({
@@ -24,6 +27,7 @@ export function DependencyLinks({
   activeDragId,
   activeDragType,
   dragDelta = 0,
+  linkPreview = null,
 }: DependencyLinksProps) {
   const taskMap = useMemo(() => {
     const map = new Map<string, { task: GanttTask; index: number }>();
@@ -101,7 +105,7 @@ export function DependencyLinks({
     return result;
   }, [tasks, taskMap, startDate, columnWidth, rowHeight, activeDragId, activeDragType, dragDelta]);
 
-  if (links.length === 0) {
+  if (links.length === 0 && !linkPreview) {
     return null;
   }
 
@@ -121,6 +125,17 @@ export function DependencyLinks({
           markerEnd="url(#dep-arrow)"
         />
       ))}
+
+      {linkPreview && (
+        <line
+          {...getStyles('dependencyLine')}
+          x1={linkPreview.x1}
+          y1={linkPreview.y1}
+          x2={linkPreview.x2}
+          y2={linkPreview.y2}
+          markerEnd="url(#dep-arrow)"
+        />
+      )}
     </svg>
   );
 }

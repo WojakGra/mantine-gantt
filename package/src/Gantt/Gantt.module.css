@@ -288,6 +288,11 @@
   box-shadow: var(--mantine-shadow-sm);
 }
 
+.taskBar:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}
+
 .taskBar[data-dragging] {
   cursor: grabbing;
   box-shadow: var(--mantine-shadow-md);
@@ -334,6 +339,7 @@
   opacity: 0;
   transition: opacity 150ms ease;
   background: linear-gradient(to right, transparent, rgb(0, 0, 0, 0.1));
+  touch-action: none;
 }
 
 .taskBar:hover .resizeHandle {
@@ -362,6 +368,7 @@
   transition: opacity 150ms ease;
   background: linear-gradient(to left, transparent, rgb(0, 0, 0, 0.1));
   z-index: 2;
+  touch-action: none;
 }
 
 .taskBar:hover .resizeHandleLeft {
@@ -395,6 +402,7 @@
     opacity 150ms ease,
     transform 150ms ease;
   z-index: 30;
+  touch-action: none;
 }
 
 .taskBar:hover .linkConnector {

@@ -30,8 +30,6 @@
   },
   "repository": "https://github.com/WojakGra/mantine-gantt.git",
   "peerDependencies": {
-    "@dnd-kit/core": "^6.1.0",
-    "@dnd-kit/utilities": "^3.2.2",
     "@mantine/core": ">=7.0.0",
     "@mantine/hooks": ">=7.0.0",
     "dayjs": "^1.11.10",

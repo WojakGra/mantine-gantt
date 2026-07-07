@@ -10,7 +10,7 @@ export type {
   GanttStylesNames,
   GanttCssVariables,
   GanttFactory,
-  DragContext,
+  GanttDragType,
 } from './types';
 
 export {
