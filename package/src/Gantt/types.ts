@@ -1,4 +1,15 @@
+import type { ReactNode } from 'react';
 import type { BoxProps, ElementProps, Factory, MantineColor, StylesApiProps } from '@mantine/core';
+
+/** A column in the left-hand task list */
+export interface GanttColumn {
+  /** Header label */
+  header: ReactNode;
+  /** Cell content for a given task */
+  render: (task: GanttTask) => ReactNode;
+  /** Fixed column width in px; omit to flex (1fr) */
+  width?: number;
+}
 
 /** Represents a single task in the Gantt chart */
 export interface GanttTask {
@@ -61,6 +72,9 @@ export type GanttCssVariables = {
 export interface GanttBaseProps {
   /** Array of tasks to display */
   tasks: GanttTask[];
+
+  /** Columns shown in the left task list. Defaults to Name / Start / End / Duration. */
+  columns?: GanttColumn[];
 
   /** Callback when a task is updated (moved or resized) */
   onTaskUpdate?: (task: GanttTask) => void;

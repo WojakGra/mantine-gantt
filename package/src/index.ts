@@ -3,6 +3,7 @@ export { Gantt } from './Gantt';
 export type {
   GanttProps,
   GanttTask,
+  GanttColumn,
   GanttStylesNames,
   GanttFactory,
   GanttCssVariables,

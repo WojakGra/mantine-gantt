@@ -24,7 +24,6 @@
 
 .taskListHeader {
   display: grid;
-  grid-template-columns: 1fr 90px 90px;
   height: var(--gantt-header-height, 50px);
   background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
   border-bottom: 1px solid var(--mantine-color-default-border);
@@ -58,7 +57,6 @@
 
 .taskListRow {
   display: grid;
-  grid-template-columns: 1fr 90px 90px;
   height: var(--gantt-row-height, 44px);
   border-bottom: 1px solid var(--mantine-color-default-border);
   transition: background-color 150ms ease;
@@ -183,6 +181,7 @@
   overflow-y: scroll;
   scrollbar-width: none; /* Hide vertical scrollbar - synced via task list */
   position: relative;
+  cursor: grab; /* Drag empty space to pan (scrollbar is hidden) */
 }
 
 .timelineBody::-webkit-scrollbar {

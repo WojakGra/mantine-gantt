@@ -52,6 +52,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     unstyled,
     vars,
     tasks: initialTasks,
+    columns,
     onTaskUpdate,
     onTaskClick,
     onLinkCreate,
@@ -189,6 +190,38 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     }
   }, []);
 
+  // Drag-to-pan the timeline with the mouse on empty space (the scrollbar is hidden). Bars and
+  // handles stopPropagation on pointerdown, so any pointerdown reaching here is empty canvas.
+  // Touch/pen keep native scroll+momentum — only mouse lacks a grab affordance.
+  const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const handlePanStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const body = timelineBodyRef.current;
+    if (e.pointerType !== 'mouse' || !body) {
+      return;
+    }
+    e.preventDefault(); // stop text/SVG selection from starting
+    panRef.current = { x: e.clientX, y: e.clientY, left: body.scrollLeft, top: body.scrollTop };
+    body.setPointerCapture?.(e.pointerId);
+    body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
+  }, []);
+  const handlePanMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    const body = timelineBodyRef.current;
+    if (!pan || !body) {
+      return;
+    }
+    body.scrollLeft = pan.left - (e.clientX - pan.x);
+    body.scrollTop = pan.top - (e.clientY - pan.y);
+  }, []);
+  const handlePanEnd = useCallback(() => {
+    panRef.current = null;
+    document.body.style.userSelect = '';
+    if (timelineBodyRef.current) {
+      timelineBodyRef.current.style.cursor = '';
+    }
+  }, []);
+
   // Keep the viewport visually pinned whenever the timeline origin (bounds.start)
   // shifts — e.g. when bounds re-tighten on drag end. A date sits at pixel
   // (date - start) * columnWidth; if start moves by N days, every position shifts by
@@ -237,6 +270,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
       {/* Left Pane - Task List */}
       <TaskList
         tasks={tasks}
+        columns={columns}
         getStyles={getStyles}
         bodyRef={taskListBodyRef}
         onScroll={handleTaskListScroll}
@@ -255,7 +289,15 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
           />
         </div>
 
-        <div {...getStyles('timelineBody')} ref={timelineBodyRef} onScroll={handleTimelineScroll}>
+        <div
+          {...getStyles('timelineBody')}
+          ref={timelineBodyRef}
+          onScroll={handleTimelineScroll}
+          onPointerDown={handlePanStart}
+          onPointerMove={handlePanMove}
+          onPointerUp={handlePanEnd}
+          onPointerCancel={handlePanEnd}
+        >
           <div
             {...getStyles('timelineContent')}
             ref={timelineContentRef}

@@ -7,6 +7,7 @@ export { TimelineHeader } from './TimelineHeader';
 export type {
   GanttProps,
   GanttTask,
+  GanttColumn,
   GanttStylesNames,
   GanttCssVariables,
   GanttFactory,
