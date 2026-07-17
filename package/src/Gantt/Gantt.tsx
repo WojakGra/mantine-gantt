@@ -4,6 +4,7 @@ import {
   Box,
   createVarsResolver,
   factory,
+  getThemeColor,
   useProps,
   useStyles,
   VisuallyHidden,
@@ -15,12 +16,15 @@ import { TimelineGrid } from './TimelineGrid';
 import { TimelineHeader } from './TimelineHeader';
 import type { GanttFactory, GanttProps, GanttTask } from './types';
 import { useGanttDrag } from './use-gantt-drag';
-import { calculateTimelineBounds, dateToPixel, durationToPixels } from './utils';
+import { calculateTimelineBounds, dateToPixel, durationToPixels, getCriticalPath } from './utils';
 import classes from './Gantt.module.css';
 
 // Right-side room kept ahead of the dragged bar; the END grows dynamically by this much
 // so dragging into the future is effectively unbounded.
 const DRAG_BUFFER_DAYS = 30;
+
+// Stable empty set so the reference doesn't change on every render when the feature is off.
+const EMPTY_CRITICAL = new Set<string>();
 
 const defaultProps: Partial<GanttProps> = {
   columnWidth: 40,
@@ -29,15 +33,19 @@ const defaultProps: Partial<GanttProps> = {
   showTitle: false,
   showTodayMarker: true,
   viewMode: 'day',
+  highlightCriticalPath: false,
+  criticalPathColor: 'red',
+  showBaselines: true,
 };
 
 const varsResolver = createVarsResolver<GanttFactory>(
-  (_, { columnWidth, rowHeight, taskListWidth }) => ({
+  (theme, { columnWidth, rowHeight, taskListWidth, criticalPathColor }) => ({
     root: {
       '--gantt-column-width': `${columnWidth}px`,
       '--gantt-row-height': `${rowHeight}px`,
       '--gantt-header-height': '50px',
       '--gantt-task-list-width': `${taskListWidth}px`,
+      '--gantt-critical-color': getThemeColor(criticalPathColor, theme),
     },
   })
 );
@@ -57,14 +65,17 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     onTaskUpdate,
     onTaskClick,
     onLinkCreate,
-    columnWidth,
-    rowHeight,
+    columnWidth = 40,
+    rowHeight = 44,
     taskListWidth,
     showTitle,
     showTodayMarker,
     startDate,
     endDate,
-    viewMode,
+    viewMode = 'day',
+    highlightCriticalPath,
+    criticalPathColor,
+    showBaselines,
     ...others
   } = props;
 
@@ -93,12 +104,20 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
         return Math.max(columnWidth / 2, 14); // Each day is 1/2nd, min 14px
       case 'day':
       default:
-        return columnWidth;
+        // Clamp to ≥1 so columnWidth={0} can't produce division-by-zero (deltaX / width).
+        return Math.max(columnWidth, 1);
     }
   }, [viewMode, columnWidth]);
 
   // Internal state for tasks
   const [tasks, setTasks] = useState<GanttTask[]>(initialTasks);
+
+  // Critical path (CPM over dependencies) — only recomputed when tasks settle (drag commits),
+  // not live during drag.
+  const criticalIds = useMemo(
+    () => (highlightCriticalPath ? getCriticalPath(tasks) : EMPTY_CRITICAL),
+    [highlightCriticalPath, tasks]
+  );
   // Screen-reader announcement for drag/keyboard commits.
   const [announcement, setAnnouncement] = useState('');
   // Visible width of the timeline body, so the grid/header can be extended to fill the
@@ -342,7 +361,23 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                   didDrag={drag.didDrag}
                   nudge={drag.nudge}
                   onClick={() => onTaskClick?.(task)}
+                  isCritical={criticalIds.has(task.id)}
                 />
+
+                {showBaselines && task.baseline && (
+                  <div
+                    {...getStyles('baselineBar')}
+                    data-task-id={task.id}
+                    style={{
+                      left: dateToPixel(
+                        task.baseline.startDate,
+                        bounds.start,
+                        effectiveColumnWidth
+                      ),
+                      width: durationToPixels(task.baseline.duration, effectiveColumnWidth),
+                    }}
+                  />
+                )}
               </div>
             ))}
 
@@ -357,6 +392,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
               activeDragType={active && active.type !== 'link' ? active.type : null}
               dragDelta={active && active.type !== 'link' ? active.deltaX : 0}
               linkPreview={linkPreview}
+              criticalIds={criticalIds}
             />
           </div>
         </div>

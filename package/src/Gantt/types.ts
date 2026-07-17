@@ -27,6 +27,13 @@ export interface GanttTask {
   dependencies?: string[];
   /** Custom color for the task bar */
   color?: MantineColor;
+  /** Planned (baseline) schedule to compare against the actual bar */
+  baseline?: {
+    /** Baseline start date in ISO format (YYYY-MM-DD) */
+    startDate: string;
+    /** Baseline duration in days */
+    duration: number;
+  };
 }
 
 export type GanttStylesNames =
@@ -54,6 +61,7 @@ export type GanttStylesNames =
   | 'taskBar'
   | 'taskBarLabel'
   | 'taskBarProgress'
+  | 'baselineBar'
   | 'resizeHandle'
   | 'resizeHandleLeft'
   | 'linkConnector'
@@ -66,7 +74,8 @@ export type GanttCssVariables = {
     | '--gantt-column-width'
     | '--gantt-row-height'
     | '--gantt-header-height'
-    | '--gantt-task-list-width';
+    | '--gantt-task-list-width'
+    | '--gantt-critical-color';
 };
 
 export interface GanttBaseProps {
@@ -94,10 +103,19 @@ export interface GanttBaseProps {
   /** Width of the task list panel in pixels, default 320 */
   taskListWidth?: number;
 
-  /** Start date of the timeline, defaults to earliest task start - 7 days */
+  /**
+   * Start date of the timeline, defaults to earliest task start - 7 days.
+   * Interpreted as a local calendar day (its local getFullYear/getMonth/getDate), so
+   * construct it with `new Date(year, monthIndex, day)` — or otherwise ensure it is local
+   * midnight — rather than `new Date('YYYY-MM-DD')`, which is UTC midnight and can resolve
+   * to the previous local day in timezones behind UTC.
+   */
   startDate?: Date;
 
-  /** End date of the timeline, defaults to latest task end + 7 days */
+  /**
+   * End date of the timeline, defaults to latest task end + 7 days.
+   * Interpreted as a local calendar day — see `startDate` for construction guidance.
+   */
   endDate?: Date;
 
   /** View mode: 'day' | 'week' | 'month', default 'day' */
@@ -108,6 +126,15 @@ export interface GanttBaseProps {
 
   /** Whether to show today marker line, default true */
   showTodayMarker?: boolean;
+
+  /** Highlight the critical path (CPM over dependencies), default false */
+  highlightCriticalPath?: boolean;
+
+  /** Color for critical bars and links, default 'red' */
+  criticalPathColor?: MantineColor;
+
+  /** Whether to render baseline bars for tasks that define `baseline`, default true */
+  showBaselines?: boolean;
 }
 
 export type GanttFactory = Factory<{

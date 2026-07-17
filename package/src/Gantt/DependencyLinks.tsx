@@ -16,6 +16,8 @@ interface DependencyLinksProps {
   dragDelta?: number;
   /** Live link-creation line, in timelineContent coordinates. */
   linkPreview?: { x1: number; y1: number; x2: number; y2: number } | null;
+  /** IDs of tasks on the critical path; a link is critical when both endpoints are. */
+  criticalIds?: Set<string>;
 }
 
 export function DependencyLinks({
@@ -28,6 +30,7 @@ export function DependencyLinks({
   activeDragType,
   dragDelta = 0,
   linkPreview = null,
+  criticalIds,
 }: DependencyLinksProps) {
   const taskMap = useMemo(() => {
     const map = new Map<string, { task: GanttTask; index: number }>();
@@ -38,7 +41,7 @@ export function DependencyLinks({
   }, [tasks]);
 
   const links = useMemo(() => {
-    const result: Array<{ id: string; points: string }> = [];
+    const result: Array<{ id: string; points: string; critical: boolean }> = [];
     // Bar is vertically centered in the row, so midY is simply rowHeight / 2
     const barMidYOffset = rowHeight / 2;
 
@@ -98,16 +101,29 @@ export function DependencyLinks({
         result.push({
           id: `${fromId}-${toTask.id}`,
           points,
+          critical: (criticalIds?.has(fromId) && criticalIds?.has(toTask.id)) || false,
         });
       });
     });
 
     return result;
-  }, [tasks, taskMap, startDate, columnWidth, rowHeight, activeDragId, activeDragType, dragDelta]);
+  }, [
+    tasks,
+    taskMap,
+    startDate,
+    columnWidth,
+    rowHeight,
+    activeDragId,
+    activeDragType,
+    dragDelta,
+    criticalIds,
+  ]);
 
   if (links.length === 0 && !linkPreview) {
     return null;
   }
+
+  const hasCriticalLink = links.some((link) => link.critical);
 
   return (
     <svg {...getStyles('dependencyLinks')}>
@@ -115,14 +131,27 @@ export function DependencyLinks({
         <marker id="dep-arrow" markerWidth="5" markerHeight="4" refX="4" refY="2" orient="auto">
           <path d="M0,0 L5,2 L0,4 z" {...getStyles('linkArrow')} />
         </marker>
+        {hasCriticalLink && (
+          <marker
+            id="dep-arrow-critical"
+            markerWidth="5"
+            markerHeight="4"
+            refX="4"
+            refY="2"
+            orient="auto"
+          >
+            <path d="M0,0 L5,2 L0,4 z" data-critical {...getStyles('linkArrow')} />
+          </marker>
+        )}
       </defs>
 
       {links.map((link) => (
         <polyline
           key={link.id}
           {...getStyles('dependencyLine')}
+          data-critical={link.critical || undefined}
           points={link.points}
-          markerEnd="url(#dep-arrow)"
+          markerEnd={link.critical ? 'url(#dep-arrow-critical)' : 'url(#dep-arrow)'}
         />
       ))}
 

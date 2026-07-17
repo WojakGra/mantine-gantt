@@ -7,6 +7,7 @@ import {
   formatTaskDate,
   generateDayHeaders,
   generateWeekHeaders,
+  getCriticalPath,
   getTaskEndDate,
   pixelsToDuration,
   pixelToDate,
@@ -176,6 +177,42 @@ describe('utils', () => {
       expect(bounds.start.isBefore(today)).toBe(true);
       expect(bounds.end.isAfter(today)).toBe(true);
     });
+
+    it('includes baseline dates in bounds', () => {
+      const tasks: GanttTask[] = [
+        {
+          id: '1',
+          label: 'a',
+          startDate: '2026-02-10',
+          duration: 3,
+          progress: 0,
+          baseline: { startDate: '2026-02-01', duration: 20 },
+        },
+      ];
+      const { start, end } = calculateTimelineBounds(tasks);
+      // default padding = 7 days around the baseline span (Feb 1 .. Feb 21)
+      expect(start.format('YYYY-MM-DD')).toBe('2026-01-25');
+      expect(end.format('YYYY-MM-DD')).toBe('2026-02-28');
+    });
+
+    it('aligns a local-component Date startDate with string-based task/baseline dates', () => {
+      const tasks: GanttTask[] = [
+        {
+          id: '1',
+          label: 'Task',
+          startDate: '2026-02-05',
+          duration: 5,
+          progress: 0,
+          baseline: { startDate: '2026-02-01', duration: 5 },
+        },
+      ];
+      // Local-midnight construction, as documented on GanttBaseProps.startDate.
+      const start = new Date(2026, 0, 25);
+      const bounds = calculateTimelineBounds(tasks, start);
+      expect(bounds.start.format('YYYY-MM-DD')).toBe('2026-01-25');
+      // Baseline start (Feb 1) should be exactly 7 days after bounds.start.
+      expect(dayjs('2026-02-01').diff(bounds.start, 'day')).toBe(7);
+    });
   });
 
   describe('formatTaskDate', () => {
@@ -197,6 +234,52 @@ describe('utils', () => {
     it('handles duration of 1', () => {
       const endDate = getTaskEndDate('2026-02-01', 1);
       expect(endDate.isSame(dayjs('2026-02-01'), 'day')).toBe(true);
+    });
+  });
+
+  describe('getCriticalPath', () => {
+    const task = (id: string, duration: number, dependencies?: string[]): GanttTask => ({
+      id,
+      label: id,
+      startDate: '2026-02-01',
+      duration,
+      progress: 0,
+      dependencies,
+    });
+
+    it('marks every task in a simple chain as critical', () => {
+      const result = getCriticalPath([task('a', 2), task('b', 3, ['a']), task('c', 1, ['b'])]);
+      expect(result).toEqual(new Set(['a', 'b', 'c']));
+    });
+
+    it('excludes a branch with slack', () => {
+      // a(2) -> b(5) -> d(1) is the long path (8); a -> c(1) -> d has slack
+      const result = getCriticalPath([
+        task('a', 2),
+        task('b', 5, ['a']),
+        task('c', 1, ['a']),
+        task('d', 1, ['b', 'c']),
+      ]);
+      expect(result).toEqual(new Set(['a', 'b', 'd']));
+    });
+
+    it('with no dependencies, only the longest task(s) are critical', () => {
+      const result = getCriticalPath([task('a', 3), task('b', 7), task('c', 7)]);
+      expect(result).toEqual(new Set(['b', 'c']));
+    });
+
+    it('ignores unknown dependency ids', () => {
+      const result = getCriticalPath([task('a', 2, ['ghost']), task('b', 1, ['a'])]);
+      expect(result).toEqual(new Set(['a', 'b']));
+    });
+
+    it('does not crash or hang on cyclic input', () => {
+      const result = getCriticalPath([task('a', 2, ['b']), task('b', 3, ['a'])]);
+      expect(result.size).toBeGreaterThan(0);
+    });
+
+    it('returns an empty set for no tasks', () => {
+      expect(getCriticalPath([])).toEqual(new Set());
     });
   });
 });

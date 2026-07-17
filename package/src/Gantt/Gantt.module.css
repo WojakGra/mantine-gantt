@@ -287,6 +287,10 @@
   box-shadow: var(--mantine-shadow-sm);
 }
 
+.taskBar[data-critical] {
+  background-color: var(--gantt-critical-color);
+}
+
 .taskBar:focus-visible {
   outline: 2px solid var(--mantine-primary-color-filled);
   outline-offset: 2px;
@@ -320,6 +324,18 @@
   white-space: nowrap;
   position: relative;
   z-index: 1;
+}
+
+.baselineBar {
+  position: absolute;
+  bottom: 1px;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(
+    --gantt-baseline-color,
+    light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3))
+  );
+  pointer-events: none;
 }
 
 /* ============================================
@@ -467,6 +483,15 @@
   stroke: light-dark(var(--mantine-color-gray-8), var(--mantine-color-gray-3));
 }
 
+.dependencyLine[data-critical] {
+  stroke: var(--gantt-critical-color);
+  stroke-width: 2.5;
+}
+
 .linkArrow {
   fill: light-dark(var(--mantine-color-gray-6), var(--mantine-color-gray-5));
+}
+
+.linkArrow[data-critical] {
+  fill: var(--gantt-critical-color);
 }

@@ -12,6 +12,8 @@ interface TaskBarProps {
   isDragging?: boolean;
   /** True when this bar is the current link drop target (highlight it). */
   isLinkTarget?: boolean;
+  /** True when this task is on the critical path. */
+  isCritical?: boolean;
   /** Active drag type when THIS bar is the one being dragged, else null. */
   dragType?: GanttDragType | null;
   /** Continuous, scroll-adjusted px delta for the active drag of THIS bar. */
@@ -29,6 +31,7 @@ function TaskBarComponent({
   getStyles,
   isDragging,
   isLinkTarget,
+  isCritical,
   dragType,
   dragDeltaX = 0,
   startDrag,
@@ -69,6 +72,7 @@ function TaskBarComponent({
       data-task-id={task.id}
       data-dragging={isDragging || undefined}
       data-link-target={isLinkTarget || undefined}
+      data-critical={isCritical || undefined}
       aria-label={`${task.label}, starts ${task.startDate}, ${task.duration} day duration. Arrow keys move, Shift+Arrow resize.`}
       style={{
         left: visualLeft,
@@ -137,6 +141,7 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.columnWidth === nextProps.columnWidth &&
     prevProps.isDragging === nextProps.isDragging &&
     prevProps.isLinkTarget === nextProps.isLinkTarget &&
+    prevProps.isCritical === nextProps.isCritical &&
     prevProps.dragType === nextProps.dragType &&
     prevProps.dragDeltaX === nextProps.dragDeltaX &&
     prevProps.startDate.isSame(nextProps.startDate)

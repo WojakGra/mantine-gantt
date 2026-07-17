@@ -27,6 +27,7 @@ export const GanttStylesApi: StylesApiData<GanttFactory> = {
     taskBar: 'Task bar',
     taskBarLabel: 'Task bar label',
     taskBarProgress: 'Task bar progress',
+    baselineBar: 'Baseline bar',
     resizeHandle: 'Resize handle',
     resizeHandleLeft: 'Resize handle left',
     linkConnector: 'Link connector',
@@ -41,6 +42,7 @@ export const GanttStylesApi: StylesApiData<GanttFactory> = {
       '--gantt-row-height': 'Controls row height',
       '--gantt-header-height': 'Controls header height',
       '--gantt-task-list-width': 'Controls task list width',
+      '--gantt-critical-color': 'Controls critical path color',
     },
   },
 

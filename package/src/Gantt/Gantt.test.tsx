@@ -207,3 +207,59 @@ describe('@mantine/gantt/Gantt - Task Data', () => {
     expect(timelineRows.length).toBe(3);
   });
 });
+
+describe('critical path', () => {
+  it('marks critical bars with data-critical when highlightCriticalPath is set', () => {
+    const { container } = render(<Gantt tasks={mockTasks} highlightCriticalPath />);
+    // mockTasks is a simple chain 1 -> 2 -> 3: all critical
+    expect(container.querySelectorAll('[class*="taskBar"][data-critical]').length).toBe(3);
+    // both dependency lines connect critical tasks
+    expect(container.querySelectorAll('polyline[data-critical]').length).toBe(2);
+  });
+
+  it('does not mark anything without the prop', () => {
+    const { container } = render(<Gantt tasks={mockTasks} />);
+    expect(container.querySelector('[data-critical]')).toBeNull();
+  });
+
+  it('exposes --gantt-critical-color from criticalPathColor', () => {
+    const { container } = render(
+      <Gantt tasks={mockTasks} highlightCriticalPath criticalPathColor="grape" />
+    );
+    const root = container.querySelector('[class*="root"]');
+    expect(root).toHaveStyle('--gantt-critical-color: var(--mantine-color-grape-filled)');
+  });
+});
+
+describe('baselines', () => {
+  const tasksWithBaseline: GanttTask[] = [
+    {
+      id: '1',
+      label: 'Task',
+      startDate: '2026-02-05',
+      duration: 5,
+      progress: 0,
+      baseline: { startDate: '2026-02-01', duration: 5 },
+    },
+  ];
+
+  it('renders a baseline bar with correct geometry', () => {
+    const { container } = render(
+      <Gantt tasks={tasksWithBaseline} startDate={new Date(2026, 0, 25)} columnWidth={40} />
+    );
+    const baseline = container.querySelector('[class*="baselineBar"]');
+    expect(baseline).toBeInTheDocument();
+    // Feb 1 is 7 days after Jan 25 timeline start: left = 7 * 40, width = 5 * 40
+    expect(baseline).toHaveStyle({ left: '280px', width: '200px' });
+  });
+
+  it('hides baselines with showBaselines={false}', () => {
+    const { container } = render(<Gantt tasks={tasksWithBaseline} showBaselines={false} />);
+    expect(container.querySelector('[class*="baselineBar"]')).toBeNull();
+  });
+
+  it('renders no baseline bar for tasks without baseline data', () => {
+    const { container } = render(<Gantt tasks={mockTasks} />);
+    expect(container.querySelector('[class*="baselineBar"]')).toBeNull();
+  });
+});
