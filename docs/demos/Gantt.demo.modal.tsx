@@ -25,7 +25,7 @@ function Demo() {
   const [selected, setSelected] = useState<GanttTask | null>(null);
   return (
     <>
-      <Gantt tasks={tasks} columns={columns} taskListWidth={360} onTaskClick={setSelected} />
+      <Gantt defaultTasks={tasks} columns={columns} onTaskClick={setSelected} />
       <Modal opened={!!selected} onClose={() => setSelected(null)} title={selected?.label} centered>
         {selected && (
           <Stack gap="xs">
@@ -80,7 +80,7 @@ function Demo() {
   const [selected, setSelected] = useState<GanttTask | null>(null);
   return (
     <>
-      <Gantt tasks={tasks} columns={columns} taskListWidth={360} onTaskClick={setSelected} />
+      <Gantt defaultTasks={tasks} columns={columns} onTaskClick={setSelected} />
       <Modal opened={!!selected} onClose={() => setSelected(null)} title={selected?.label} centered>
         {selected && (
           <Stack gap="xs">

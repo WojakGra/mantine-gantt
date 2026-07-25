@@ -55,6 +55,13 @@
   display: none;
 }
 
+/* Sizer for row virtualization: full list height, the rows scrolled off above are
+   padding-top. Padding must NOT go on .taskListBody — it is a flex item, and padding is
+   added to its flex base size, so the header would be squeezed to nothing. */
+.taskListContent {
+  box-sizing: border-box;
+}
+
 .taskListRow {
   display: grid;
   height: var(--gantt-row-height, 44px);
@@ -88,6 +95,34 @@
 .taskListCell:not(:first-child) {
   font-size: var(--mantine-font-size-xs);
   color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
+}
+
+.expandChevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  padding: 0;
+  border: none;
+  border-radius: var(--mantine-radius-sm);
+  background: none;
+  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.expandChevron:hover {
+  background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+}
+
+.expandChevron svg {
+  transition: transform 150ms ease;
+}
+
+.expandChevron[data-collapsed] svg {
+  transform: rotate(-90deg);
 }
 
 /* ============================================
@@ -287,6 +322,23 @@
   box-shadow: var(--mantine-shadow-sm);
 }
 
+.taskBar[data-critical] {
+  background-color: var(--gantt-critical-color);
+}
+
+/* Summary (parent) bar: thin, dark, non-interactive schedule */
+.taskBar[data-summary] {
+  height: 10px;
+  top: 9px;
+  border-radius: 2px;
+  background-color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-2));
+  cursor: default;
+}
+
+.taskBar[data-summary] .taskBarLabel {
+  display: none;
+}
+
 .taskBar:focus-visible {
   outline: 2px solid var(--mantine-primary-color-filled);
   outline-offset: 2px;
@@ -320,6 +372,38 @@
   white-space: nowrap;
   position: relative;
   z-index: 1;
+}
+
+.baselineBar {
+  position: absolute;
+  bottom: 1px;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(
+    --gantt-baseline-color,
+    light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3))
+  );
+  pointer-events: none;
+}
+
+/* Bracket end caps hanging below a summary bar */
+.summaryBar {
+  position: absolute;
+  top: 0;
+  width: 4px;
+  height: 16px;
+  background-color: inherit;
+  pointer-events: none;
+}
+
+.summaryBar[data-side='start'] {
+  left: 0;
+  border-radius: 2px 0 2px 2px;
+}
+
+.summaryBar[data-side='end'] {
+  right: 0;
+  border-radius: 0 2px 2px;
 }
 
 /* ============================================
@@ -467,6 +551,15 @@
   stroke: light-dark(var(--mantine-color-gray-8), var(--mantine-color-gray-3));
 }
 
+.dependencyLine[data-critical] {
+  stroke: var(--gantt-critical-color);
+  stroke-width: 2.5;
+}
+
 .linkArrow {
   fill: light-dark(var(--mantine-color-gray-6), var(--mantine-color-gray-5));
+}
+
+.linkArrow[data-critical] {
+  fill: var(--gantt-critical-color);
 }

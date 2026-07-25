@@ -25,4 +25,5 @@ export {
   calculateTimelineBounds,
   generateDayHeaders,
   generateWeekHeaders,
+  wouldCreateCycle,
 } from './utils';

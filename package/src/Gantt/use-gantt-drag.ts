@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import { useCallback, useRef, useState } from 'react';
 import type { GanttDragType, GanttTask } from './types';
-import { snapToGrid } from './utils';
+import { snapToGrid, wouldCreateCycle } from './utils';
 
 // Auto-scroll tuning (mirrors @mantine/schedule's use-auto-scroll-on-drag).
 const EDGE_THRESHOLD = 50;
@@ -23,7 +23,8 @@ export interface GanttDragState {
 
 export interface UseGanttDragOptions {
   tasks: GanttTask[];
-  setTasks: React.Dispatch<React.SetStateAction<GanttTask[]>>;
+  /** Commit a fully computed task list. The hook never assumes the state is local. */
+  commitTasks: (next: GanttTask[]) => void;
   /** Effective column width in px (already adjusted for viewMode). */
   columnWidth: number;
   /** Scroll container — drives scroll-adjusted delta and auto-scroll. */
@@ -196,28 +197,35 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
     [recompute, updateAutoScroll]
   );
 
+  // Callbacks fire here, never inside a state updater — React StrictMode invokes updaters
+  // twice, which would double-fire onTaskUpdate/onLinkCreate for a single drag.
   const commit = useCallback((drag: DragRef) => {
-    const { setTasks, columnWidth, onTaskUpdate, onLinkCreate, announce, bodyRef } =
+    const { tasks, commitTasks, columnWidth, onTaskUpdate, onLinkCreate, announce, bodyRef } =
       optsRef.current;
 
     if (drag.type === 'link') {
       const el = document.elementFromPoint(drag.lastClientX, drag.lastClientY);
       const targetEl = el?.closest('[data-task-id]') as HTMLElement | null;
       const toTaskId = targetEl?.dataset.taskId;
-      if (toTaskId && toTaskId !== drag.taskId) {
-        setTasks((current) =>
-          current.map((task) => {
-            if (task.id !== toTaskId) {
-              return task;
-            }
-            const deps = task.dependencies || [];
-            return deps.includes(drag.taskId)
-              ? task
-              : { ...task, dependencies: [...deps, drag.taskId] };
-          })
-        );
-        onLinkCreate?.(drag.taskId, toTaskId);
+      if (!toTaskId || toTaskId === drag.taskId) {
+        return;
       }
+      if (wouldCreateCycle(tasks, drag.taskId, toTaskId)) {
+        announce?.('Link not created: it would create a circular dependency');
+        return;
+      }
+      commitTasks(
+        tasks.map((task) => {
+          if (task.id !== toTaskId) {
+            return task;
+          }
+          const deps = task.dependencies || [];
+          return deps.includes(drag.taskId)
+            ? task
+            : { ...task, dependencies: [...deps, drag.taskId] };
+        })
+      );
+      onLinkCreate?.(drag.taskId, toTaskId);
       return;
     }
 
@@ -229,34 +237,33 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       return;
     }
 
-    setTasks((current) => {
-      const next = current.map((task) => {
-        if (task.id !== drag.taskId) {
-          return task;
-        }
-        if (drag.type === 'move') {
-          return {
-            ...task,
-            startDate: dayjs(task.startDate).add(days, 'day').format('YYYY-MM-DD'),
-          };
-        }
-        if (drag.type === 'resize-end') {
-          return { ...task, duration: Math.max(1, task.duration + days) };
-        }
-        // resize-start: shift start, keep the right edge (duration shrinks/grows by -days).
+    const next = tasks.map((task) => {
+      if (task.id !== drag.taskId) {
+        return task;
+      }
+      if (drag.type === 'move') {
         return {
           ...task,
           startDate: dayjs(task.startDate).add(days, 'day').format('YYYY-MM-DD'),
-          duration: Math.max(1, task.duration - days),
         };
-      });
-      const updated = next.find((t) => t.id === drag.taskId);
-      if (updated) {
-        onTaskUpdate?.(updated);
-        announce?.(`${updated.label} ${updated.startDate}, ${updated.duration} day duration`);
       }
-      return next;
+      if (drag.type === 'resize-end') {
+        return { ...task, duration: Math.max(1, task.duration + days) };
+      }
+      // resize-start: shift start, keep the right edge (duration shrinks/grows by -days).
+      return {
+        ...task,
+        startDate: dayjs(task.startDate).add(days, 'day').format('YYYY-MM-DD'),
+        duration: Math.max(1, task.duration - days),
+      };
     });
+    commitTasks(next);
+
+    const updated = next.find((t) => t.id === drag.taskId);
+    if (updated) {
+      onTaskUpdate?.(updated);
+      announce?.(`${updated.label} ${updated.startDate}, ${updated.duration} day duration`);
+    }
   }, []);
 
   const handlePointerUp = useCallback(() => {
@@ -303,27 +310,26 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
   const didDrag = useCallback(() => didDragRef.current, []);
 
   const nudge = useCallback((taskId: string, action: 'move' | 'resize', days: number) => {
-    const { setTasks, onTaskUpdate, announce } = optsRef.current;
-    setTasks((current) => {
-      const next = current.map((task) => {
-        if (task.id !== taskId) {
-          return task;
-        }
-        if (action === 'move') {
-          return {
-            ...task,
-            startDate: dayjs(task.startDate).add(days, 'day').format('YYYY-MM-DD'),
-          };
-        }
-        return { ...task, duration: Math.max(1, task.duration + days) };
-      });
-      const updated = next.find((t) => t.id === taskId);
-      if (updated) {
-        onTaskUpdate?.(updated);
-        announce?.(`${updated.label} ${updated.startDate}, ${updated.duration} day duration`);
+    const { tasks, commitTasks, onTaskUpdate, announce } = optsRef.current;
+    const next = tasks.map((task) => {
+      if (task.id !== taskId) {
+        return task;
       }
-      return next;
+      if (action === 'move') {
+        return {
+          ...task,
+          startDate: dayjs(task.startDate).add(days, 'day').format('YYYY-MM-DD'),
+        };
+      }
+      return { ...task, duration: Math.max(1, task.duration + days) };
     });
+    commitTasks(next);
+
+    const updated = next.find((t) => t.id === taskId);
+    if (updated) {
+      onTaskUpdate?.(updated);
+      announce?.(`${updated.label} ${updated.startDate}, ${updated.duration} day duration`);
+    }
   }, []);
 
   return { state, startDrag, didDrag, nudge };

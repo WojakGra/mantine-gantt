@@ -98,7 +98,7 @@ export default { title: 'Gantt' };
 export function Default() {
   return (
     <div style={{ padding: 20, height: 600 }}>
-      <Gantt tasks={mockTasks} />
+      <Gantt defaultTasks={mockTasks} />
     </div>
   );
 }
@@ -125,7 +125,7 @@ export function Interactive() {
   return (
     <div style={{ padding: 20, height: 600 }}>
       <Gantt
-        tasks={tasks}
+        defaultTasks={tasks}
         onTaskUpdate={handleTaskUpdate}
         onTaskClick={handleTaskClick}
         onLinkCreate={handleLinkCreate}
@@ -137,7 +137,7 @@ export function Interactive() {
 export function CustomColumnWidth() {
   return (
     <div style={{ padding: 20, height: 600 }}>
-      <Gantt tasks={mockTasks} columnWidth={60} rowHeight={50} />
+      <Gantt defaultTasks={mockTasks} columnWidth={60} rowHeight={50} />
     </div>
   );
 }
@@ -145,7 +145,7 @@ export function CustomColumnWidth() {
 export function NarrowTaskList() {
   return (
     <div style={{ padding: 20, height: 600 }}>
-      <Gantt tasks={mockTasks} taskListWidth={240} />
+      <Gantt defaultTasks={mockTasks} taskListWidth={240} />
     </div>
   );
 }
@@ -179,7 +179,7 @@ export function SmallDataset() {
 
   return (
     <div style={{ padding: 20, height: 300 }}>
-      <Gantt tasks={smallTasks} />
+      <Gantt defaultTasks={smallTasks} />
     </div>
   );
 }
@@ -206,7 +206,7 @@ export function LargeDataset() {
 
   return (
     <div style={{ padding: 20, height: 800 }}>
-      <Gantt tasks={largeTasks} />
+      <Gantt defaultTasks={largeTasks} />
     </div>
   );
 }
@@ -215,7 +215,7 @@ export function WithMantineProvider() {
   return (
     <MantineProvider>
       <div style={{ padding: 20, height: 600 }}>
-        <Gantt tasks={mockTasks} />
+        <Gantt defaultTasks={mockTasks} />
       </div>
     </MantineProvider>
   );
@@ -225,7 +225,7 @@ export function DarkMode() {
   return (
     <MantineProvider forceColorScheme="dark">
       <div style={{ padding: 20, height: 600, backgroundColor: '#1a1b1e' }}>
-        <Gantt tasks={mockTasks} />
+        <Gantt defaultTasks={mockTasks} />
       </div>
     </MantineProvider>
   );
@@ -234,7 +234,7 @@ export function DarkMode() {
 export function CompactView() {
   return (
     <div style={{ padding: 20, height: 400 }}>
-      <Gantt tasks={mockTasks} columnWidth={25} rowHeight={32} taskListWidth={400} />
+      <Gantt defaultTasks={mockTasks} columnWidth={25} rowHeight={32} taskListWidth={400} />
     </div>
   );
 }
@@ -242,7 +242,7 @@ export function CompactView() {
 export function WideView() {
   return (
     <div style={{ padding: 20, height: 700 }}>
-      <Gantt tasks={mockTasks} columnWidth={80} rowHeight={60} taskListWidth={400} />
+      <Gantt defaultTasks={mockTasks} columnWidth={80} rowHeight={60} taskListWidth={400} />
     </div>
   );
 }
@@ -278,7 +278,7 @@ export function NoDependencies() {
 
   return (
     <div style={{ padding: 20, height: 350 }}>
-      <Gantt tasks={noDepsTask} />
+      <Gantt defaultTasks={noDepsTask} />
     </div>
   );
 }
@@ -388,7 +388,7 @@ export function ComplexDependencies() {
 
   return (
     <div style={{ padding: 20, height: 600 }}>
-      <Gantt tasks={complexTasks} />
+      <Gantt defaultTasks={complexTasks} />
     </div>
   );
 }
@@ -420,7 +420,7 @@ export function AllColors() {
 
   return (
     <div style={{ padding: 20, height: 600 }}>
-      <Gantt tasks={colorTasks} />
+      <Gantt defaultTasks={colorTasks} />
     </div>
   );
 }
@@ -464,7 +464,7 @@ export function VariableDurations() {
 
   return (
     <div style={{ padding: 20, height: 400 }}>
-      <Gantt tasks={varTasks} />
+      <Gantt defaultTasks={varTasks} />
     </div>
   );
 }
@@ -472,7 +472,7 @@ export function VariableDurations() {
 export function WithHoverTitle() {
   return (
     <div style={{ padding: 20, height: 600 }}>
-      <Gantt tasks={mockTasks} showTitle />
+      <Gantt defaultTasks={mockTasks} showTitle />
     </div>
   );
 }
@@ -480,7 +480,7 @@ export function WithHoverTitle() {
 export function WeekView() {
   return (
     <div style={{ padding: 20, height: 600 }}>
-      <Gantt tasks={mockTasks} viewMode="week" />
+      <Gantt defaultTasks={mockTasks} viewMode="week" />
     </div>
   );
 }
@@ -488,7 +488,158 @@ export function WeekView() {
 export function MonthView() {
   return (
     <div style={{ padding: 20, height: 600 }}>
-      <Gantt tasks={mockTasks} viewMode="month" />
+      <Gantt defaultTasks={mockTasks} viewMode="month" />
+    </div>
+  );
+}
+
+export function CriticalPathAndBaselines() {
+  const tasks: GanttTask[] = [
+    {
+      id: '1',
+      label: 'Planning',
+      startDate: '2026-02-02',
+      duration: 4,
+      progress: 100,
+      baseline: { startDate: '2026-02-02', duration: 3 },
+    },
+    {
+      id: '2',
+      label: 'Backend',
+      startDate: '2026-02-06',
+      duration: 8,
+      progress: 60,
+      dependencies: ['1'],
+      baseline: { startDate: '2026-02-05', duration: 7 },
+    },
+    {
+      id: '3',
+      label: 'Design',
+      startDate: '2026-02-06',
+      duration: 3,
+      progress: 100,
+      dependencies: ['1'],
+      color: 'teal',
+      baseline: { startDate: '2026-02-05', duration: 3 },
+    },
+    {
+      id: '4',
+      label: 'Integration',
+      startDate: '2026-02-16',
+      duration: 5,
+      progress: 0,
+      dependencies: ['2', '3'],
+      baseline: { startDate: '2026-02-12', duration: 5 },
+    },
+  ];
+  return (
+    <div style={{ padding: 20, height: 400 }}>
+      <Gantt defaultTasks={tasks} highlightCriticalPath />
+    </div>
+  );
+}
+
+export function Controlled() {
+  // The external store is the single source of truth: bars only move once this state changes.
+  const [tasks, setTasks] = useState<GanttTask[]>(mockTasks);
+  const [frozen, setFrozen] = useState(false);
+
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <label style={{ display: 'block', marginBottom: 10 }}>
+        <input
+          type="checkbox"
+          checked={frozen}
+          onChange={(e) => setFrozen(e.currentTarget.checked)}
+        />{' '}
+        Ignore changes (bars should snap back)
+      </label>
+      <Gantt tasks={tasks} onTasksChange={(next) => !frozen && setTasks(next)} />
+    </div>
+  );
+}
+
+export function Uncontrolled() {
+  // No `tasks` prop: the component owns the list, like 0.2.x did.
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt defaultTasks={mockTasks} />
+    </div>
+  );
+}
+
+const groupedTasks: GanttTask[] = [
+  { id: 'design', label: 'Design', startDate: '2026-02-02', duration: 1, progress: 0 },
+  {
+    id: 'wireframes',
+    label: 'Wireframes',
+    startDate: '2026-02-02',
+    duration: 4,
+    progress: 100,
+    parentId: 'design',
+  },
+  {
+    id: 'visuals',
+    label: 'Visual design',
+    startDate: '2026-02-06',
+    duration: 6,
+    progress: 60,
+    parentId: 'design',
+    color: 'violet',
+  },
+  { id: 'build', label: 'Build', startDate: '2026-02-12', duration: 1, progress: 0 },
+  {
+    id: 'api',
+    label: 'API',
+    startDate: '2026-02-12',
+    duration: 8,
+    progress: 40,
+    parentId: 'build',
+    dependencies: ['wireframes'],
+    color: 'orange',
+  },
+  {
+    id: 'ui',
+    label: 'UI',
+    startDate: '2026-02-16',
+    duration: 10,
+    progress: 10,
+    parentId: 'build',
+    dependencies: ['visuals'],
+  },
+  {
+    id: 'auth',
+    label: 'Auth screens',
+    startDate: '2026-02-16',
+    duration: 5,
+    progress: 0,
+    parentId: 'ui',
+    color: 'teal',
+  },
+  {
+    id: 'launch',
+    label: 'Launch',
+    startDate: '2026-02-26',
+    duration: 2,
+    progress: 0,
+    dependencies: ['ui'],
+    color: 'green',
+  },
+];
+
+export function Grouping() {
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt defaultTasks={groupedTasks} />
+    </div>
+  );
+}
+
+export function GroupingCollapsed() {
+  // Only 'design' is expanded initially; 'build' (and its subtree) starts collapsed.
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt defaultTasks={groupedTasks} defaultExpandedIds={['design']} />
     </div>
   );
 }

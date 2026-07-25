@@ -16,3 +16,47 @@ End and Duration). Use `onTaskClick` to react to clicks — here it opens a moda
 task details.
 
 <Demo data={demos.modal} />
+
+## Grouping tasks
+
+Set `parentId` on a task and it becomes a child row. A task that has children renders as a
+summary bar: it spans its whole subtree and shows a duration-weighted average progress, so the
+dates you give a parent are only a placeholder. Nesting goes as deep as you need. Rows are
+collapsible via the chevron — `defaultExpandedIds` picks which parents start open (omit it and
+everything is open), and `onToggleExpand` reports each toggle.
+
+<Demo data={demos.grouping} />
+
+## View modes
+
+`viewMode` switches the timeline scale between `day` (default), `week` and `month`. It shrinks
+the day column derived from `columnWidth` rather than changing the underlying day grid, so drags
+still snap to whole days. `weekStart` controls the header's week numbering and the grid separators.
+
+<Demo data={demos.viewMode} />
+
+## Critical path & baselines
+
+`highlightCriticalPath` runs CPM over the dependency graph and paints the zero-slack tasks and
+links with `criticalPathColor`. Independently, any task with a `baseline` gets a thin planned bar
+underneath the actual one — turn those off with `showBaselines={false}`.
+
+<Demo data={demos.criticalPath} />
+
+## Controlled and uncontrolled
+
+Pass `defaultTasks` and the component owns the task list (uncontrolled) — this is what the demos
+above do. Pass `tasks` together with `onTasksChange` and your own state is the single source of
+truth (controlled): the component keeps no copy, so a dragged bar only moves once the new `tasks`
+prop arrives. Use this mode to drive the chart from a query cache, a store, or an undo/redo stack.
+
+```tsx
+const [tasks, setTasks] = useState(initialTasks);
+
+<Gantt tasks={tasks} onTasksChange={setTasks} />;
+```
+
+`onTaskUpdate` and `onLinkCreate` keep working in both modes — they fire alongside
+`onTasksChange`, not instead of it.
+
+Migrating from 0.2.x: `<Gantt tasks={x} />` becomes `<Gantt defaultTasks={x} />`.

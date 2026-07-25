@@ -12,6 +12,10 @@ interface TaskBarProps {
   isDragging?: boolean;
   /** True when this bar is the current link drop target (highlight it). */
   isLinkTarget?: boolean;
+  /** True when this task is on the critical path. */
+  isCritical?: boolean;
+  /** True when this task has children and renders as a non-interactive summary bar. */
+  isSummary?: boolean;
   /** Active drag type when THIS bar is the one being dragged, else null. */
   dragType?: GanttDragType | null;
   /** Continuous, scroll-adjusted px delta for the active drag of THIS bar. */
@@ -29,6 +33,8 @@ function TaskBarComponent({
   getStyles,
   isDragging,
   isLinkTarget,
+  isCritical,
+  isSummary,
   dragType,
   dragDeltaX = 0,
   startDrag,
@@ -69,13 +75,19 @@ function TaskBarComponent({
       data-task-id={task.id}
       data-dragging={isDragging || undefined}
       data-link-target={isLinkTarget || undefined}
-      aria-label={`${task.label}, starts ${task.startDate}, ${task.duration} day duration. Arrow keys move, Shift+Arrow resize.`}
+      data-critical={isCritical || undefined}
+      data-summary={isSummary || undefined}
+      aria-label={
+        isSummary
+          ? `${task.label}, summary, starts ${task.startDate}, ${task.duration} day duration.`
+          : `${task.label}, starts ${task.startDate}, ${task.duration} day duration. Arrow keys move, Shift+Arrow resize.`
+      }
       style={{
         left: visualLeft,
         width: visualWidth,
         ['--task-bar-color' as string]: barColor,
       }}
-      onPointerDown={(e) => startDrag('move', task.id, e)}
+      onPointerDown={isSummary ? undefined : (e) => startDrag('move', task.id, e)}
       onClick={() => {
         if (didDrag()) {
           return;
@@ -86,21 +98,31 @@ function TaskBarComponent({
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onClick?.();
-        } else if (e.key === 'ArrowLeft') {
+        } else if (e.key === 'ArrowLeft' && !isSummary) {
           e.preventDefault();
           nudge(task.id, e.shiftKey ? 'resize' : 'move', -1);
-        } else if (e.key === 'ArrowRight') {
+        } else if (e.key === 'ArrowRight' && !isSummary) {
           e.preventDefault();
           nudge(task.id, e.shiftKey ? 'resize' : 'move', 1);
         }
       }}
     >
+      {/* Bracket end caps for summary bars */}
+      {isSummary && (
+        <>
+          <div {...getStyles('summaryBar')} data-side="start" aria-hidden="true" />
+          <div {...getStyles('summaryBar')} data-side="end" aria-hidden="true" />
+        </>
+      )}
+
       {/* Left resize handle */}
-      <div
-        {...getStyles('resizeHandleLeft')}
-        aria-hidden="true"
-        onPointerDown={(e) => startDrag('resize-start', task.id, e)}
-      />
+      {!isSummary && (
+        <div
+          {...getStyles('resizeHandleLeft')}
+          aria-hidden="true"
+          onPointerDown={(e) => startDrag('resize-start', task.id, e)}
+        />
+      )}
 
       {/* Progress indicator */}
       <div {...getStyles('taskBarProgress')} style={{ width: `${task.progress}%` }} />
@@ -109,18 +131,22 @@ function TaskBarComponent({
       <span {...getStyles('taskBarLabel')}>{task.label}</span>
 
       {/* Right resize handle */}
-      <div
-        {...getStyles('resizeHandle')}
-        aria-hidden="true"
-        onPointerDown={(e) => startDrag('resize-end', task.id, e)}
-      />
+      {!isSummary && (
+        <div
+          {...getStyles('resizeHandle')}
+          aria-hidden="true"
+          onPointerDown={(e) => startDrag('resize-end', task.id, e)}
+        />
+      )}
 
       {/* Link connector (right side) */}
-      <div
-        {...getStyles('linkConnector')}
-        aria-hidden="true"
-        onPointerDown={(e) => startDrag('link', task.id, e)}
-      />
+      {!isSummary && (
+        <div
+          {...getStyles('linkConnector')}
+          aria-hidden="true"
+          onPointerDown={(e) => startDrag('link', task.id, e)}
+        />
+      )}
     </div>
   );
 }
@@ -137,6 +163,8 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.columnWidth === nextProps.columnWidth &&
     prevProps.isDragging === nextProps.isDragging &&
     prevProps.isLinkTarget === nextProps.isLinkTarget &&
+    prevProps.isCritical === nextProps.isCritical &&
+    prevProps.isSummary === nextProps.isSummary &&
     prevProps.dragType === nextProps.dragType &&
     prevProps.dragDeltaX === nextProps.dragDeltaX &&
     prevProps.startDate.isSame(nextProps.startDate)

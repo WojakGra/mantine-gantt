@@ -18,4 +18,5 @@ export {
   formatTaskDate,
   getTaskEndDate,
   calculateTimelineBounds,
+  wouldCreateCycle,
 } from './Gantt';

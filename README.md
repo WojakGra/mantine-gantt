@@ -13,6 +13,7 @@ A fully-featured Gantt chart component for [Mantine](https://mantine.dev/). Buil
 - 🎨 **Mantine Integration** - Full support for Mantine's styling API, themes, and CSS variables
 - 📱 **Responsive** - Works across different screen sizes with customizable column widths
 - ♿ **Accessible** - Keyboard navigation and ARIA attributes for screen readers
+- ⚡ **Virtualized rows** - Only the visible rows are rendered, so long task lists stay smooth
 - 🎯 **TypeScript** - Full type definitions included
 
 ## Installation
@@ -50,24 +51,63 @@ const tasks: GanttTask[] = [
 ];
 
 function App() {
-  return <Gantt tasks={tasks} />;
+  return <Gantt defaultTasks={tasks} />;
 }
 ```
 
+## Controlled and uncontrolled
+
+`Gantt` works in either mode, following the usual Mantine convention.
+
+**Uncontrolled** — pass `defaultTasks` and the component owns the task list. Drag, resize, link
+and keyboard edits are applied internally; `onTaskUpdate` / `onLinkCreate` / `onTasksChange` still
+report them.
+
+```tsx
+<Gantt defaultTasks={tasks} onTaskUpdate={(task) => save(task)} />
+```
+
+**Controlled** — pass `tasks` and `onTasksChange`, and your store is the single source of truth.
+The component keeps no copy: after a drag the bar lands wherever the new `tasks` prop puts it, so
+if you ignore the change the bar snaps back. That is what makes external stores (TanStack Query,
+Redux, undo/redo) work.
+
+```tsx
+const [tasks, setTasks] = useState(initialTasks);
+
+<Gantt tasks={tasks} onTasksChange={setTasks} />;
+```
+
+## Migrating from 0.2.x
+
+`tasks` used to be an initial value that the component copied into internal state; it is now the
+controlled value. To keep the 0.2 behaviour, rename the prop:
+
+```diff
+-<Gantt tasks={tasks} />
++<Gantt defaultTasks={tasks} />
+```
+
+Keep `tasks` only if you also pass `onTasksChange` (or otherwise update the prop yourself) —
+otherwise the bars will not move.
+
 ## Props
 
-| Prop            | Type                 | Default  | Description                            |
-| --------------- | -------------------- | -------- | -------------------------------------- |
-| `tasks`         | `GanttTask[]`        | Required | Array of tasks to display              |
-| `columnWidth`   | `number`             | `40`     | Width of each day column in pixels     |
-| `rowHeight`     | `number`             | `44`     | Height of each task row in pixels      |
-| `taskListWidth` | `number`             | `320`    | Width of the task list panel in pixels |
-| `showTitle`     | `boolean`            | `false`  | Show task title on hover               |
-| `startDate`     | `Date`               | Auto     | Start date of the timeline             |
-| `endDate`       | `Date`               | Auto     | End date of the timeline               |
-| `onTaskUpdate`  | `(task) => void`     | -        | Callback when a task is updated        |
-| `onTaskClick`   | `(task) => void`     | -        | Callback when a task is clicked        |
-| `onLinkCreate`  | `(from, to) => void` | -        | Callback when a dependency is created  |
+| Prop            | Type                 | Default  | Description                                     |
+| --------------- | -------------------- | -------- | ----------------------------------------------- |
+| `tasks`         | `GanttTask[]`        | -        | Tasks to display (controlled)                   |
+| `defaultTasks`  | `GanttTask[]`        | -        | Initial tasks (uncontrolled)                    |
+| `onTasksChange` | `(tasks) => void`    | -        | Called with the full new list after any change  |
+| `columnWidth`   | `number`             | `40`     | Width of each day column in pixels              |
+| `rowHeight`     | `number`             | `44`     | Height of each task row in pixels               |
+| `taskListWidth` | `number`             | auto     | Panel width; auto = sum of `columns` widths     |
+| `weekStart`     | `0 \| 1`             | `1`      | First day of the week (0 = Sunday, 1 = Monday)  |
+| `showTitle`     | `boolean`            | `false`  | Show task title on hover                        |
+| `startDate`     | `Date`               | Auto     | Start date of the timeline                      |
+| `endDate`       | `Date`               | Auto     | End date of the timeline                        |
+| `onTaskUpdate`  | `(task) => void`     | -        | Callback when a task is updated                 |
+| `onTaskClick`   | `(task) => void`     | -        | Callback when a task is clicked                 |
+| `onLinkCreate`  | `(from, to) => void` | -        | Callback when a dependency is created           |
 
 ## Task Object
 
@@ -89,7 +129,7 @@ The Gantt component supports Mantine's Styles API:
 
 ```tsx
 <Gantt
-  tasks={tasks}
+  defaultTasks={tasks}
   classNames={{
     root: 'my-gantt',
     taskBar: 'my-task-bar',
@@ -121,20 +161,20 @@ The Gantt component supports Mantine's Styles API:
 ### Compact View
 
 ```tsx
-<Gantt tasks={tasks} columnWidth={25} rowHeight={32} />
+<Gantt defaultTasks={tasks} columnWidth={25} rowHeight={32} />
 ```
 
 ### Wide View
 
 ```tsx
-<Gantt tasks={tasks} columnWidth={80} rowHeight={60} />
+<Gantt defaultTasks={tasks} columnWidth={80} rowHeight={60} />
 ```
 
 ### With Callbacks
 
 ```tsx
 <Gantt
-  tasks={tasks}
+  defaultTasks={tasks}
   onTaskUpdate={(task) => console.log('Updated:', task)}
   onTaskClick={(task) => console.log('Clicked:', task)}
   onLinkCreate={(from, to) => console.log('Link:', from, '->', to)}
