@@ -9,6 +9,7 @@ import {
   useStyles,
   VisuallyHidden,
 } from '@mantine/core';
+import { useUncontrolled } from '@mantine/hooks';
 import { DependencyLinks } from './DependencyLinks';
 import { TaskBar } from './TaskBar';
 import { TaskList } from './TaskList';
@@ -16,7 +17,14 @@ import { TimelineGrid } from './TimelineGrid';
 import { TimelineHeader } from './TimelineHeader';
 import type { GanttFactory, GanttProps, GanttTask } from './types';
 import { useGanttDrag } from './use-gantt-drag';
-import { calculateTimelineBounds, dateToPixel, durationToPixels, getCriticalPath } from './utils';
+import {
+  buildTaskTree,
+  calculateTimelineBounds,
+  dateToPixel,
+  durationToPixels,
+  getCriticalPath,
+  getEffectiveTask,
+} from './utils';
 import classes from './Gantt.module.css';
 
 // Right-side room kept ahead of the dragged bar; the END grows dynamically by this much
@@ -33,6 +41,7 @@ const defaultProps: Partial<GanttProps> = {
   showTitle: false,
   showTodayMarker: true,
   viewMode: 'day',
+  weekStart: 1,
   highlightCriticalPath: false,
   criticalPathColor: 'red',
   showBaselines: true,
@@ -60,7 +69,9 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     unstyled,
     vars,
     attributes,
-    tasks: initialTasks,
+    tasks: tasksProp,
+    defaultTasks,
+    onTasksChange,
     columns,
     onTaskUpdate,
     onTaskClick,
@@ -73,9 +84,12 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     startDate,
     endDate,
     viewMode = 'day',
+    weekStart = 1,
     highlightCriticalPath,
     criticalPathColor,
     showBaselines,
+    defaultExpandedIds,
+    onToggleExpand,
     ...others
   } = props;
 
@@ -109,8 +123,49 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     }
   }, [viewMode, columnWidth]);
 
-  // Internal state for tasks
-  const [tasks, setTasks] = useState<GanttTask[]>(initialTasks);
+  // Controlled (`tasks` + `onTasksChange`) or uncontrolled (`defaultTasks`) — in controlled
+  // mode nothing is stored here, every change goes out through onTasksChange.
+  const [tasks, setTasks] = useUncontrolled<GanttTask[]>({
+    value: tasksProp,
+    defaultValue: defaultTasks,
+    finalValue: [],
+    onChange: onTasksChange,
+  });
+
+  // Collapse state (uncontrolled). When defaultExpandedIds is given, every parent
+  // not listed starts collapsed; otherwise everything starts expanded.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => {
+    if (!defaultExpandedIds) {
+      return new Set();
+    }
+    const expanded = new Set(defaultExpandedIds);
+    return new Set(
+      buildTaskTree(tasksProp ?? defaultTasks ?? [], new Set())
+        .filter((row) => row.hasChildren && !expanded.has(row.task.id))
+        .map((row) => row.task.id)
+    );
+  });
+
+  const toggleExpand = useCallback(
+    (taskId: string) => {
+      // A currently collapsed row is about to become expanded.
+      onToggleExpand?.(taskId, collapsedIds.has(taskId));
+      setCollapsedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(taskId)) {
+          next.delete(taskId);
+        } else {
+          next.add(taskId);
+        }
+        return next;
+      });
+    },
+    [onToggleExpand, collapsedIds]
+  );
+
+  // Visible rows in render order; parents carry their computed envelope schedule.
+  // Recomputed only when tasks settle (drag commits) or collapse toggles.
+  const rows = useMemo(() => buildTaskTree(tasks, collapsedIds), [tasks, collapsedIds]);
 
   // Critical path (CPM over dependencies) — only recomputed when tasks settle (drag commits),
   // not live during drag.
@@ -133,7 +188,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   // All drag interactions (move / resize / link) on plain pointer events — no @dnd-kit.
   const drag = useGanttDrag({
     tasks,
-    setTasks,
+    commitTasks: setTasks,
     columnWidth: effectiveColumnWidth,
     bodyRef: timelineBodyRef,
     contentRef: timelineContentRef,
@@ -268,17 +323,17 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     if (active?.type !== 'link' || !active.linkCursor) {
       return null;
     }
-    const srcIndex = tasks.findIndex((t) => t.id === active.taskId);
+    const srcIndex = rows.findIndex((r) => r.task.id === active.taskId);
     if (srcIndex === -1) {
       return null;
     }
-    const src = tasks[srcIndex];
+    const src = rows[srcIndex];
     const x1 =
       dateToPixel(src.startDate, bounds.start, effectiveColumnWidth) +
       durationToPixels(src.duration, effectiveColumnWidth);
     const y1 = srcIndex * rowHeight + rowHeight / 2;
     return { x1, y1, x2: active.linkCursor.x, y2: active.linkCursor.y };
-  }, [active, tasks, bounds.start, effectiveColumnWidth, rowHeight]);
+  }, [active, rows, bounds.start, effectiveColumnWidth, rowHeight]);
 
   // Calculate today line position
   const today = dayjs();
@@ -290,11 +345,13 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     <Box ref={ref} {...getStyles('root')} {...others}>
       {/* Left Pane - Task List */}
       <TaskList
-        tasks={tasks}
+        rows={rows}
         columns={columns}
         getStyles={getStyles}
         bodyRef={taskListBodyRef}
         onScroll={handleTaskListScroll}
+        collapsedIds={collapsedIds}
+        onToggleExpand={toggleExpand}
       />
 
       {/* Right Pane - Timeline */}
@@ -307,6 +364,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
             getStyles={getStyles}
             totalWidth={timelineWidth}
             viewMode={viewMode}
+            weekStart={weekStart}
           />
         </div>
 
@@ -322,16 +380,17 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
           <div
             {...getStyles('timelineContent')}
             ref={timelineContentRef}
-            style={{ width: timelineWidth, height: tasks.length * rowHeight }}
+            style={{ width: timelineWidth, height: rows.length * rowHeight }}
           >
             <TimelineGrid
               startDate={bounds.start}
               endDate={displayEnd}
               columnWidth={effectiveColumnWidth}
-              rowCount={tasks.length}
+              rowCount={rows.length}
               rowHeight={rowHeight}
               getStyles={getStyles}
               viewMode={viewMode}
+              weekStart={weekStart}
             />
 
             {/* Today line */}
@@ -340,50 +399,54 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
             )}
 
             {/* Task rows with bars */}
-            {tasks.map((task, index) => (
-              <div
-                key={task.id}
-                {...getStyles('timelineRow')}
-                title={showTitle ? task.label : undefined}
-                style={{ top: index * rowHeight }}
-              >
-                <TaskBar
-                  key={`taskbar-${task.id}`}
-                  task={task}
-                  startDate={bounds.start}
-                  columnWidth={effectiveColumnWidth}
-                  getStyles={getStyles}
-                  isDragging={active?.taskId === task.id && active.type !== 'link'}
-                  isLinkTarget={active?.type === 'link' && active.dropTargetId === task.id}
-                  dragType={active?.taskId === task.id ? active.type : null}
-                  dragDeltaX={active?.taskId === task.id ? active.deltaX : 0}
-                  startDrag={drag.startDrag}
-                  didDrag={drag.didDrag}
-                  nudge={drag.nudge}
-                  onClick={() => onTaskClick?.(task)}
-                  isCritical={criticalIds.has(task.id)}
-                />
-
-                {showBaselines && task.baseline && (
-                  <div
-                    {...getStyles('baselineBar')}
-                    data-task-id={task.id}
-                    style={{
-                      left: dateToPixel(
-                        task.baseline.startDate,
-                        bounds.start,
-                        effectiveColumnWidth
-                      ),
-                      width: durationToPixels(task.baseline.duration, effectiveColumnWidth),
-                    }}
+            {rows.map((row, index) => {
+              const task = getEffectiveTask(row);
+              return (
+                <div
+                  key={task.id}
+                  {...getStyles('timelineRow')}
+                  title={showTitle ? task.label : undefined}
+                  style={{ top: index * rowHeight }}
+                >
+                  <TaskBar
+                    key={`taskbar-${task.id}`}
+                    task={task}
+                    startDate={bounds.start}
+                    columnWidth={effectiveColumnWidth}
+                    getStyles={getStyles}
+                    isSummary={row.hasChildren}
+                    isDragging={active?.taskId === task.id && active.type !== 'link'}
+                    isLinkTarget={active?.type === 'link' && active.dropTargetId === task.id}
+                    dragType={active?.taskId === task.id ? active.type : null}
+                    dragDeltaX={active?.taskId === task.id ? active.deltaX : 0}
+                    startDrag={drag.startDrag}
+                    didDrag={drag.didDrag}
+                    nudge={drag.nudge}
+                    onClick={() => onTaskClick?.(task)}
+                    isCritical={criticalIds.has(task.id)}
                   />
-                )}
-              </div>
-            ))}
+
+                  {showBaselines && task.baseline && (
+                    <div
+                      {...getStyles('baselineBar')}
+                      data-task-id={task.id}
+                      style={{
+                        left: dateToPixel(
+                          task.baseline.startDate,
+                          bounds.start,
+                          effectiveColumnWidth
+                        ),
+                        width: durationToPixels(task.baseline.duration, effectiveColumnWidth),
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
 
             {/* Dependency arrows + live link line */}
             <DependencyLinks
-              tasks={tasks}
+              rows={rows}
               startDate={bounds.start}
               columnWidth={effectiveColumnWidth}
               rowHeight={rowHeight}

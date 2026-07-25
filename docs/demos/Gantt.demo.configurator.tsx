@@ -96,7 +96,7 @@ const mockTasks: GanttTask[] = [
 ];
 
 function Demo() {
-  return <Gantt tasks={mockTasks} {{props}} />;
+  return <Gantt defaultTasks={mockTasks} {{props}} />;
 }
 `;
 
@@ -191,7 +191,7 @@ const mockTasks: GanttTask[] = [
 ];
 
 function Wrapper(props: any) {
-  return <Gantt tasks={mockTasks} {...props} />;
+  return <Gantt defaultTasks={mockTasks} {...props} />;
 }
 
 export const configurator: MantineDemo = {

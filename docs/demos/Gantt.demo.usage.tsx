@@ -96,7 +96,7 @@ const mockTasks: GanttTask[] =  [
 ];
 
 function Demo() {
-  return <Gantt tasks={mockTasks} taskListWidth={400} />;
+  return <Gantt defaultTasks={mockTasks} taskListWidth={400} />;
 }
 `;
 
@@ -191,7 +191,7 @@ const mockTasks: GanttTask[] = [
 ];
 
 function Demo() {
-  return <Gantt tasks={mockTasks} taskListWidth={400} />;
+  return <Gantt defaultTasks={mockTasks} taskListWidth={400} />;
 }
 
 export const usage: MantineDemo = {

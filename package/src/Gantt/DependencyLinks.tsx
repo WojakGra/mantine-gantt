@@ -1,11 +1,12 @@
 import type { Dayjs } from 'dayjs';
 import React, { useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
-import type { GanttDragType, GanttFactory, GanttTask } from './types';
-import { dateToPixel, durationToPixels } from './utils';
+import type { GanttDragType, GanttFactory, GanttTask, GanttTreeRow } from './types';
+import { dateToPixel, durationToPixels, getEffectiveTask } from './utils';
 
 interface DependencyLinksProps {
-  tasks: GanttTask[];
+  /** Visible rows in render order — hidden tasks get no arrows. */
+  rows: GanttTreeRow[];
   startDate: Dayjs;
   columnWidth: number;
   rowHeight: number;
@@ -21,7 +22,7 @@ interface DependencyLinksProps {
 }
 
 export function DependencyLinks({
-  tasks,
+  rows,
   startDate,
   columnWidth,
   rowHeight,
@@ -34,25 +35,28 @@ export function DependencyLinks({
 }: DependencyLinksProps) {
   const taskMap = useMemo(() => {
     const map = new Map<string, { task: GanttTask; index: number }>();
-    tasks.forEach((task, index) => {
-      map.set(task.id, { task, index });
+    rows.forEach((row, index) => {
+      map.set(row.task.id, { task: getEffectiveTask(row), index });
     });
     return map;
-  }, [tasks]);
+  }, [rows]);
 
   const links = useMemo(() => {
     const result: Array<{ id: string; points: string; critical: boolean }> = [];
     // Bar is vertically centered in the row, so midY is simply rowHeight / 2
     const barMidYOffset = rowHeight / 2;
 
-    tasks.forEach((toTask, toIndex) => {
-      if (!toTask.dependencies || toTask.dependencies.length === 0) {
+    rows.forEach((toRow) => {
+      const deps = toRow.task.dependencies;
+      if (!deps || deps.length === 0) {
         return;
       }
+      const { task: toTask, index: toIndex } = taskMap.get(toRow.task.id)!;
 
-      toTask.dependencies.forEach((fromId) => {
+      deps.forEach((fromId) => {
         const fromData = taskMap.get(fromId);
         if (!fromData) {
+          // Unknown id, or endpoint hidden inside a collapsed subtree → no arrow.
           return;
         }
 
@@ -69,9 +73,7 @@ export function DependencyLinks({
 
         // Apply drag delta if this task is being dragged
         if (activeDragId === fromTask.id && dragDelta !== 0) {
-          if (activeDragType === 'move') {
-            fromBarRight += dragDelta;
-          } else if (activeDragType === 'resize-end') {
+          if (activeDragType === 'move' || activeDragType === 'resize-end') {
             fromBarRight += dragDelta;
           }
           // resize-start doesn't affect the right edge position visually during drag
@@ -79,9 +81,7 @@ export function DependencyLinks({
         }
 
         if (activeDragId === toTask.id && dragDelta !== 0) {
-          if (activeDragType === 'move') {
-            toBarLeft += dragDelta;
-          } else if (activeDragType === 'resize-start') {
+          if (activeDragType === 'move' || activeDragType === 'resize-start') {
             toBarLeft += dragDelta;
           }
           // resize-end doesn't affect left position
@@ -108,7 +108,7 @@ export function DependencyLinks({
 
     return result;
   }, [
-    tasks,
+    rows,
     taskMap,
     startDate,
     columnWidth,

@@ -90,6 +90,34 @@
   color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
 }
 
+.expandChevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  padding: 0;
+  border: none;
+  border-radius: var(--mantine-radius-sm);
+  background: none;
+  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.expandChevron:hover {
+  background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+}
+
+.expandChevron svg {
+  transition: transform 150ms ease;
+}
+
+.expandChevron[data-collapsed] svg {
+  transform: rotate(-90deg);
+}
+
 /* ============================================
    RIGHT PANE - TIMELINE
    ============================================ */
@@ -291,6 +319,19 @@
   background-color: var(--gantt-critical-color);
 }
 
+/* Summary (parent) bar: thin, dark, non-interactive schedule */
+.taskBar[data-summary] {
+  height: 10px;
+  top: 9px;
+  border-radius: 2px;
+  background-color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-2));
+  cursor: default;
+}
+
+.taskBar[data-summary] .taskBarLabel {
+  display: none;
+}
+
 .taskBar:focus-visible {
   outline: 2px solid var(--mantine-primary-color-filled);
   outline-offset: 2px;
@@ -336,6 +377,26 @@
     light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3))
   );
   pointer-events: none;
+}
+
+/* Bracket end caps hanging below a summary bar */
+.summaryBar {
+  position: absolute;
+  top: 0;
+  width: 4px;
+  height: 16px;
+  background-color: inherit;
+  pointer-events: none;
+}
+
+.summaryBar[data-side='start'] {
+  left: 0;
+  border-radius: 2px 0 2px 2px;
+}
+
+.summaryBar[data-side='end'] {
+  right: 0;
+  border-radius: 0 2px 2px;
 }
 
 /* ============================================

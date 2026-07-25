@@ -11,6 +11,7 @@ interface TimelineGridProps {
   rowHeight: number;
   getStyles: GetStylesApi<GanttFactory>;
   viewMode: 'day' | 'week' | 'month';
+  weekStart: 0 | 1;
 }
 
 export function TimelineGrid({
@@ -21,6 +22,7 @@ export function TimelineGrid({
   rowHeight,
   getStyles,
   viewMode,
+  weekStart,
 }: TimelineGridProps) {
   // Generate day-based grid data (always needed for positioning)
   const dayGridData = useMemo(() => {
@@ -44,13 +46,13 @@ export function TimelineGrid({
   const weekSeparators = useMemo(() => {
     const separators: number[] = [];
     dayGridData.forEach((col) => {
-      // Add separator at the start of each week (Sunday = 0)
-      if (col.date.day() === 0) {
+      // Add separator at the start of each week (weekStart: 0 = Sunday, 1 = Monday)
+      if (col.date.day() === weekStart) {
         separators.push(col.x);
       }
     });
     return separators;
-  }, [dayGridData]);
+  }, [dayGridData, weekStart]);
 
   // Generate month separator positions
   const monthSeparators = useMemo(() => {

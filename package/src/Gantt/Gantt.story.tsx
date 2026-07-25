@@ -538,3 +538,32 @@ export function CriticalPathAndBaselines() {
     </div>
   );
 }
+
+export function Controlled() {
+  // The external store is the single source of truth: bars only move once this state changes.
+  const [tasks, setTasks] = useState<GanttTask[]>(mockTasks);
+  const [frozen, setFrozen] = useState(false);
+
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <label style={{ display: 'block', marginBottom: 10 }}>
+        <input
+          type="checkbox"
+          checked={frozen}
+          onChange={(e) => setFrozen(e.currentTarget.checked)}
+        />{' '}
+        Ignore changes (bars should snap back)
+      </label>
+      <Gantt tasks={tasks} onTasksChange={(next) => !frozen && setTasks(next)} />
+    </div>
+  );
+}
+
+export function Uncontrolled() {
+  // No `tasks` prop: the component owns the list, like 0.2.x did.
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt defaultTasks={mockTasks} />
+    </div>
+  );
+}

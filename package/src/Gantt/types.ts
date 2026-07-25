@@ -27,6 +27,8 @@ export interface GanttTask {
   dependencies?: string[];
   /** Custom color for the task bar */
   color?: MantineColor;
+  /** Id of the parent task; a task that has children renders as a summary bar */
+  parentId?: string;
   /** Planned (baseline) schedule to compare against the actual bar */
   baseline?: {
     /** Baseline start date in ISO format (YYYY-MM-DD) */
@@ -36,6 +38,20 @@ export interface GanttTask {
   };
 }
 
+/** A visible row produced by buildTaskTree: the original task plus its effective schedule */
+export interface GanttTreeRow {
+  task: GanttTask;
+  /** Nesting level, 0 for roots */
+  depth: number;
+  hasChildren: boolean;
+  /** Effective start (YYYY-MM-DD): own for leaves, subtree envelope for parents */
+  startDate: string;
+  /** Effective duration in days: own for leaves, envelope span for parents */
+  duration: number;
+  /** Effective progress: own for leaves, duration-weighted child average for parents */
+  progress: number;
+}
+
 export type GanttStylesNames =
   | 'root'
   | 'taskList'
@@ -43,6 +59,7 @@ export type GanttStylesNames =
   | 'taskListBody'
   | 'taskListRow'
   | 'taskListCell'
+  | 'expandChevron'
   | 'timeline'
   | 'timelineHeader'
   | 'timelineHeaderInner'
@@ -62,6 +79,7 @@ export type GanttStylesNames =
   | 'taskBarLabel'
   | 'taskBarProgress'
   | 'baselineBar'
+  | 'summaryBar'
   | 'resizeHandle'
   | 'resizeHandleLeft'
   | 'linkConnector'
@@ -79,8 +97,18 @@ export type GanttCssVariables = {
 };
 
 export interface GanttBaseProps {
-  /** Array of tasks to display */
-  tasks: GanttTask[];
+  /**
+   * Tasks to display — controlled mode. The component keeps no copy of its own: every
+   * drag/resize/link/keyboard change is reported through `onTasksChange` and the bars only
+   * move once this prop comes back updated.
+   */
+  tasks?: GanttTask[];
+
+  /** Initial tasks — uncontrolled mode. The component owns the task list from then on. */
+  defaultTasks?: GanttTask[];
+
+  /** Called with the full new task list after any change (drag, resize, link, keyboard) */
+  onTasksChange?: (tasks: GanttTask[]) => void;
 
   /** Columns shown in the left task list. Defaults to Name / Start / End / Duration. */
   columns?: GanttColumn[];
@@ -121,6 +149,12 @@ export interface GanttBaseProps {
   /** View mode: 'day' | 'week' | 'month', default 'day' */
   viewMode?: 'day' | 'week' | 'month';
 
+  /**
+   * First day of the week — 0 = Sunday, 1 = Monday, default 1. Drives both the week numbers
+   * in the header (ISO numbering) and the week separators in the grid.
+   */
+  weekStart?: 0 | 1;
+
   /** Whether to show task titles on hover, default false */
   showTitle?: boolean;
 
@@ -135,6 +169,12 @@ export interface GanttBaseProps {
 
   /** Whether to render baseline bars for tasks that define `baseline`, default true */
   showBaselines?: boolean;
+
+  /** Ids of parents expanded initially; when omitted, all parents start expanded */
+  defaultExpandedIds?: string[];
+
+  /** Called when a parent row is expanded or collapsed via its chevron */
+  onToggleExpand?: (taskId: string, expanded: boolean) => void;
 }
 
 export type GanttFactory = Factory<{

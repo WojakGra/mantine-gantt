@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { StrictMode } from 'react';
 import { act, fireEvent } from '@testing-library/react';
 import { render, screen } from '@mantine-tests/core';
 import { Gantt, GanttTask } from './index';
@@ -261,5 +261,214 @@ describe('baselines', () => {
   it('renders no baseline bar for tasks without baseline data', () => {
     const { container } = render(<Gantt tasks={mockTasks} />);
     expect(container.querySelector('[class*="baselineBar"]')).toBeNull();
+  });
+});
+
+describe('hierarchy', () => {
+  const treeTasks: GanttTask[] = [
+    { id: 'p', label: 'Phase', startDate: '2026-02-01', duration: 1, progress: 0 },
+    {
+      id: 'a',
+      label: 'Child A',
+      parentId: 'p',
+      startDate: '2026-02-01',
+      duration: 4,
+      progress: 100,
+    },
+    {
+      id: 'b',
+      label: 'Child B',
+      parentId: 'p',
+      startDate: '2026-02-05',
+      duration: 6,
+      progress: 50,
+      dependencies: ['a'],
+    },
+    { id: 'solo', label: 'Standalone', startDate: '2026-02-03', duration: 3, progress: 0 },
+  ];
+
+  it('renders a chevron only for parents and indents children', () => {
+    const { container } = render(<Gantt tasks={treeTasks} />);
+    expect(container.querySelectorAll('[class*="expandChevron"]').length).toBe(1);
+
+    const listRows = container.querySelectorAll('[class*="mantine-Gantt-taskListRow"]');
+    // Row order is depth-first: p, a, b, solo
+    const childFirstCell = listRows[1].querySelector('[class*="taskListCell"]')!;
+    expect(childFirstCell.getAttribute('style')).toContain('16px');
+    const rootFirstCell = listRows[0].querySelector('[class*="taskListCell"]')!;
+    expect(rootFirstCell.getAttribute('style') ?? '').not.toContain('16px');
+  });
+
+  it('collapse hides subtree rows and their arrows, and fires onToggleExpand', () => {
+    const onToggleExpand = jest.fn();
+    const { container } = render(<Gantt tasks={treeTasks} onToggleExpand={onToggleExpand} />);
+
+    expect(container.querySelectorAll('[class*="mantine-Gantt-timelineRow"]').length).toBe(4);
+    expect(container.querySelectorAll('polyline[class*="dependencyLine"]').length).toBe(1);
+
+    fireEvent.click(container.querySelector('[class*="expandChevron"]')!);
+    expect(onToggleExpand).toHaveBeenCalledWith('p', false);
+    expect(container.querySelectorAll('[class*="mantine-Gantt-timelineRow"]').length).toBe(2);
+    expect(container.querySelectorAll('[class*="mantine-Gantt-taskListRow"]').length).toBe(2);
+    expect(container.querySelectorAll('polyline[class*="dependencyLine"]').length).toBe(0);
+
+    fireEvent.click(container.querySelector('[class*="expandChevron"]')!);
+    expect(onToggleExpand).toHaveBeenLastCalledWith('p', true);
+    expect(container.querySelectorAll('[class*="mantine-Gantt-timelineRow"]').length).toBe(4);
+  });
+
+  it('starts collapsed for parents not listed in defaultExpandedIds', () => {
+    const { container } = render(<Gantt tasks={treeTasks} defaultExpandedIds={[]} />);
+    expect(container.querySelectorAll('[class*="mantine-Gantt-timelineRow"]').length).toBe(2);
+  });
+
+  it('renders the parent as a summary bar with envelope geometry and no handles', () => {
+    const { container } = render(
+      <Gantt tasks={treeTasks} startDate={new Date(2026, 0, 25)} endDate={new Date(2026, 2, 1)} />
+    );
+    const bar = container.querySelector('[data-task-id="p"]')!;
+    expect(bar).toHaveAttribute('data-summary');
+    // Envelope Feb 1 → Feb 11 (exclusive): left = 7 * 40, width = 10 * 40
+    expect(bar).toHaveStyle({ left: '280px', width: '400px' });
+    expect(bar.querySelector('[class*="resizeHandle"]')).toBeNull();
+    expect(bar.querySelector('[class*="linkConnector"]')).toBeNull();
+    expect(bar.querySelectorAll('[class*="summaryBar"]').length).toBe(2);
+    // Leaves keep their handles
+    const leaf = container.querySelector('[data-task-id="a"]')!;
+    expect(leaf.querySelector('[class*="resizeHandle"]')).not.toBeNull();
+  });
+
+  it('summary bars ignore pointer drags and keyboard nudges', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={treeTasks} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="p"]')!;
+
+    pointer(bar, 'pointerdown', 100);
+    pointer(document, 'pointermove', 180);
+    pointer(document, 'pointerup', 180);
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+
+    expect(onTaskUpdate).not.toHaveBeenCalled();
+  });
+
+  it('never marks summary parents as critical', () => {
+    const { container } = render(<Gantt tasks={treeTasks} highlightCriticalPath />);
+    // Chain a(4d) → b(6d) is the longest path; p is out of the CPM graph.
+    expect(container.querySelector('[data-task-id="p"]')).not.toHaveAttribute('data-critical');
+    expect(container.querySelectorAll('[class*="taskBar"][data-critical]').length).toBe(2);
+  });
+
+  it('shows envelope dates for parents in the task list', () => {
+    render(<Gantt tasks={treeTasks} />);
+    // Parent effective end = Feb 1 + 10 days − 1 = Feb 10 (b's last day); own dates ignored.
+    expect(screen.getAllByText('Feb 10, 2026').length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('callbacks under StrictMode', () => {
+  it('fires onTaskUpdate exactly once per keyboard nudge', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(
+      <StrictMode>
+        <Gantt defaultTasks={mockTasks} onTaskUpdate={onTaskUpdate} />
+      </StrictMode>
+    );
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+
+    expect(onTaskUpdate).toHaveBeenCalledTimes(1);
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', startDate: '2026-02-02' })
+    );
+  });
+});
+
+describe('link cycle guard', () => {
+  it('refuses a link that would close a dependency cycle', () => {
+    const onLinkCreate = jest.fn();
+    const onTasksChange = jest.fn();
+    const { container } = render(
+      <Gantt defaultTasks={mockTasks} onLinkCreate={onLinkCreate} onTasksChange={onTasksChange} />
+    );
+    // Task 2 already depends on task 1, so linking 2 -> 1 would close a loop.
+    const source = container.querySelector('[data-task-id="2"]')!;
+    const target = container.querySelector('[data-task-id="1"]')!;
+    const arrowsBefore = container.querySelectorAll('[class*="dependencyLine"]').length;
+
+    // jsdom has no elementFromPoint; the hook uses it to find the drop target.
+    (document as any).elementFromPoint = () => target;
+    pointer(source.querySelector('[class*="linkConnector"]')!, 'pointerdown', 100);
+    pointer(document, 'pointermove', 300);
+    pointer(document, 'pointerup', 300);
+    delete (document as any).elementFromPoint;
+
+    expect(onLinkCreate).not.toHaveBeenCalled();
+    expect(onTasksChange).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('[class*="dependencyLine"]')).toHaveLength(arrowsBefore);
+  });
+
+  it('still creates an acyclic link', () => {
+    const onLinkCreate = jest.fn();
+    const { container } = render(<Gantt defaultTasks={mockTasks} onLinkCreate={onLinkCreate} />);
+    // 1 -> 3 adds no cycle (3 depends on 2 depends on 1).
+    const source = container.querySelector('[data-task-id="1"]')!;
+    const target = container.querySelector('[data-task-id="3"]')!;
+
+    // jsdom has no elementFromPoint; the hook uses it to find the drop target.
+    (document as any).elementFromPoint = () => target;
+    pointer(source.querySelector('[class*="linkConnector"]')!, 'pointerdown', 100);
+    pointer(document, 'pointermove', 300);
+    pointer(document, 'pointerup', 300);
+    delete (document as any).elementFromPoint;
+
+    expect(onLinkCreate).toHaveBeenCalledWith('1', '3');
+  });
+});
+
+describe('controlled / uncontrolled tasks', () => {
+  it('re-renders when the tasks prop changes', () => {
+    const { container, rerender } = render(<Gantt tasks={mockTasks} />);
+    const moved = mockTasks.map((t) => (t.id === '1' ? { ...t, startDate: '2026-02-06' } : t));
+
+    rerender(<Gantt tasks={moved} />);
+
+    expect(container.querySelector('[data-task-id="1"]')).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('starts 2026-02-06') as unknown as string
+    );
+  });
+
+  it('controlled: a nudge reports the new list but does not move the bar on its own', () => {
+    const onTasksChange = jest.fn();
+    const onTaskUpdate = jest.fn();
+    const { container } = render(
+      <Gantt tasks={mockTasks} onTasksChange={onTasksChange} onTaskUpdate={onTaskUpdate} />
+    );
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+
+    expect(onTasksChange).toHaveBeenCalledTimes(1);
+    expect(onTasksChange.mock.calls[0][0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: '1', startDate: '2026-02-02' })])
+    );
+    // Granular callback still fires alongside onTasksChange.
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', startDate: '2026-02-02' })
+    );
+    // The parent ignored the change, so the bar stays put.
+    expect(bar.getAttribute('aria-label')).toContain('starts 2026-02-01');
+  });
+
+  it('uncontrolled: defaultTasks keeps the 0.2 behaviour', () => {
+    const { container } = render(<Gantt defaultTasks={mockTasks} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+
+    expect(container.querySelector('[data-task-id="1"]')!.getAttribute('aria-label')).toContain(
+      'starts 2026-02-02'
+    );
   });
 });

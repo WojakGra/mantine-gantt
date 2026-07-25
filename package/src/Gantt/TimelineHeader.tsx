@@ -11,6 +11,7 @@ interface TimelineHeaderProps {
   getStyles: GetStylesApi<GanttFactory>;
   totalWidth: number;
   viewMode: 'day' | 'week' | 'month';
+  weekStart: 0 | 1;
 }
 
 export function TimelineHeader({
@@ -20,12 +21,16 @@ export function TimelineHeader({
   getStyles,
   totalWidth,
   viewMode,
+  weekStart,
 }: TimelineHeaderProps) {
   const today = dayjs();
 
   const dayHeaders = useMemo(() => generateDayHeaders(startDate, endDate), [startDate, endDate]);
 
-  const weekHeaders = useMemo(() => generateWeekHeaders(startDate, endDate), [startDate, endDate]);
+  const weekHeaders = useMemo(
+    () => generateWeekHeaders(startDate, endDate, weekStart),
+    [startDate, endDate, weekStart]
+  );
 
   // Generate month headers for month view
   const monthHeaders = useMemo(() => {

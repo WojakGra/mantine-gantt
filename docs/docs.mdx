@@ -16,3 +16,21 @@ End and Duration). Use `onTaskClick` to react to clicks — here it opens a moda
 task details.
 
 <Demo data={demos.modal} />
+
+## Controlled and uncontrolled
+
+Pass `defaultTasks` and the component owns the task list (uncontrolled) — this is what the demos
+above do. Pass `tasks` together with `onTasksChange` and your own state is the single source of
+truth (controlled): the component keeps no copy, so a dragged bar only moves once the new `tasks`
+prop arrives. Use this mode to drive the chart from a query cache, a store, or an undo/redo stack.
+
+```tsx
+const [tasks, setTasks] = useState(initialTasks);
+
+<Gantt tasks={tasks} onTasksChange={setTasks} />;
+```
+
+`onTaskUpdate` and `onLinkCreate` keep working in both modes — they fire alongside
+`onTasksChange`, not instead of it.
+
+Migrating from 0.2.x: `<Gantt tasks={x} />` becomes `<Gantt defaultTasks={x} />`.
