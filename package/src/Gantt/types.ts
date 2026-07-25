@@ -7,7 +7,7 @@ export interface GanttColumn {
   header: ReactNode;
   /** Cell content for a given task */
   render: (task: GanttTask) => ReactNode;
-  /** Fixed column width in px; omit to flex (1fr) */
+  /** Fixed column width in px; omit to flex (1fr, 200px when the panel width is auto-sized) */
   width?: number;
 }
 
@@ -57,6 +57,7 @@ export type GanttStylesNames =
   | 'taskList'
   | 'taskListHeader'
   | 'taskListBody'
+  | 'taskListContent'
   | 'taskListRow'
   | 'taskListCell'
   | 'expandChevron'
@@ -128,7 +129,11 @@ export interface GanttBaseProps {
   /** Height of each task row in pixels, default 44 */
   rowHeight?: number;
 
-  /** Width of the task list panel in pixels, default 320 */
+  /**
+   * Width of the task list panel in pixels. Omitted: computed from `columns` — fixed columns
+   * at their `width`, flexible ones at 200px (so the default set gives 460px). Set it only to
+   * override; a value narrower than the columns need squeezes the flexible column.
+   */
   taskListWidth?: number;
 
   /**

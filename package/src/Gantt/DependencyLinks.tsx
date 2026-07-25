@@ -19,6 +19,9 @@ interface DependencyLinksProps {
   linkPreview?: { x1: number; y1: number; x2: number; y2: number } | null;
   /** IDs of tasks on the critical path; a link is critical when both endpoints are. */
   criticalIds?: Set<string>;
+  /** Virtualized row range `[firstRow, lastRow)`; links entirely above or below it are skipped. */
+  firstRow?: number;
+  lastRow?: number;
 }
 
 export function DependencyLinks({
@@ -32,6 +35,8 @@ export function DependencyLinks({
   dragDelta = 0,
   linkPreview = null,
   criticalIds,
+  firstRow = 0,
+  lastRow = Infinity,
 }: DependencyLinksProps) {
   const taskMap = useMemo(() => {
     const map = new Map<string, { task: GanttTask; index: number }>();
@@ -61,6 +66,15 @@ export function DependencyLinks({
         }
 
         const { task: fromTask, index: fromIndex } = fromData;
+
+        // Both endpoints on the same side of the viewport → nothing of the arrow is on screen.
+        // One above and one below still draws vertical segments across it, so keep those.
+        if (
+          (fromIndex < firstRow && toIndex < firstRow) ||
+          (fromIndex >= lastRow && toIndex >= lastRow)
+        ) {
+          return;
+        }
 
         // Calculate base positions
         let fromBarRight =
@@ -117,6 +131,8 @@ export function DependencyLinks({
     activeDragType,
     dragDelta,
     criticalIds,
+    firstRow,
+    lastRow,
   ]);
 
   if (links.length === 0 && !linkPreview) {

@@ -12,10 +12,10 @@ import {
 import { useUncontrolled } from '@mantine/hooks';
 import { DependencyLinks } from './DependencyLinks';
 import { TaskBar } from './TaskBar';
-import { TaskList } from './TaskList';
+import { defaultColumns, TaskList } from './TaskList';
 import { TimelineGrid } from './TimelineGrid';
 import { TimelineHeader } from './TimelineHeader';
-import type { GanttFactory, GanttProps, GanttTask } from './types';
+import type { GanttColumn, GanttFactory, GanttProps, GanttTask } from './types';
 import { useGanttDrag } from './use-gantt-drag';
 import {
   buildTaskTree,
@@ -24,6 +24,7 @@ import {
   durationToPixels,
   getCriticalPath,
   getEffectiveTask,
+  visibleRowRange,
 } from './utils';
 import classes from './Gantt.module.css';
 
@@ -34,10 +35,17 @@ const DRAG_BUFFER_DAYS = 30;
 // Stable empty set so the reference doesn't change on every render when the feature is off.
 const EMPTY_CRITICAL = new Set<string>();
 
+// Width given to a column that declares none, when the panel width is auto-sized.
+const FLEX_COLUMN_WIDTH = 200;
+
+/** Panel width when `taskListWidth` is omitted — wide enough that no column is crushed. */
+function autoTaskListWidth(columns: GanttColumn[] = defaultColumns) {
+  return columns.reduce((sum, col) => sum + (col.width ?? FLEX_COLUMN_WIDTH), 0);
+}
+
 const defaultProps: Partial<GanttProps> = {
   columnWidth: 40,
   rowHeight: 44,
-  taskListWidth: 320,
   showTitle: false,
   showTodayMarker: true,
   viewMode: 'day',
@@ -48,12 +56,12 @@ const defaultProps: Partial<GanttProps> = {
 };
 
 const varsResolver = createVarsResolver<GanttFactory>(
-  (theme, { columnWidth, rowHeight, taskListWidth, criticalPathColor }) => ({
+  (theme, { columnWidth, rowHeight, taskListWidth, columns, criticalPathColor }) => ({
     root: {
       '--gantt-column-width': `${columnWidth}px`,
       '--gantt-row-height': `${rowHeight}px`,
       '--gantt-header-height': '50px',
-      '--gantt-task-list-width': `${taskListWidth}px`,
+      '--gantt-task-list-width': `${taskListWidth ?? autoTaskListWidth(columns)}px`,
       '--gantt-critical-color': getThemeColor(criticalPathColor, theme),
     },
   })
@@ -175,9 +183,10 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   );
   // Screen-reader announcement for drag/keyboard commits.
   const [announcement, setAnnouncement] = useState('');
-  // Visible width of the timeline body, so the grid/header can be extended to fill the
-  // screen even when the tasks span fewer days than the viewport.
-  const [viewportWidth, setViewportWidth] = useState(0);
+  // Visible size of the timeline body: the width extends the grid/header to fill the screen
+  // even when the tasks span fewer days than the viewport, the height drives row virtualization.
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [scrollTop, setScrollTop] = useState(0);
 
   // Refs for scroll synchronization
   const timelineBodyRef = useRef<HTMLDivElement>(null);
@@ -227,10 +236,16 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
   // Calculate total timeline width, extended to at least fill the visible viewport so
   // there is no empty area to the right of the last column.
-  const fillDays = effectiveColumnWidth > 0 ? Math.ceil(viewportWidth / effectiveColumnWidth) : 0;
+  const fillDays = effectiveColumnWidth > 0 ? Math.ceil(viewport.width / effectiveColumnWidth) : 0;
   const totalDays = Math.max(bounds.end.diff(bounds.start, 'day') + 1, fillDays);
   const displayEnd = bounds.start.add(totalDays - 1, 'day');
   const timelineWidth = totalDays * effectiveColumnWidth;
+
+  // Row virtualization: rows are a fixed height, so the visible slice is pure arithmetic.
+  // Both panes render only [firstRow, lastRow); the rest is padding/absolute offset, which
+  // keeps scrollHeight — and therefore the scroll sync — unchanged.
+  const [firstRow, lastRow] = visibleRowRange(scrollTop, viewport.height, rowHeight, rows.length);
+  const visibleRows = rows.slice(firstRow, lastRow);
 
   // Sync scroll between task list and timeline
   const handleTimelineScroll = useCallback(() => {
@@ -241,6 +256,9 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     if (timelineBodyRef.current && timelineHeaderRef.current) {
       timelineHeaderRef.current.scrollLeft = timelineBodyRef.current.scrollLeft;
     }
+    // Both panes are kept in sync, so the timeline's scrollTop is the single source for
+    // the virtualized row range.
+    setScrollTop(timelineBodyRef.current?.scrollTop ?? 0);
   }, []);
 
   // Measure the timeline body so the grid can be widened to fill the viewport.
@@ -249,12 +267,13 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     if (!node) {
       return undefined;
     }
-    setViewportWidth(node.clientWidth);
+    setViewport({ width: node.clientWidth, height: node.clientHeight });
     if (typeof ResizeObserver === 'undefined') {
       return undefined;
     }
     const observer = new ResizeObserver((entries) => {
-      setViewportWidth(entries[0].contentRect.width);
+      const { width, height } = entries[0].contentRect;
+      setViewport({ width, height });
     });
     observer.observe(node);
     return () => observer.disconnect();
@@ -345,13 +364,15 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     <Box ref={ref} {...getStyles('root')} {...others}>
       {/* Left Pane - Task List */}
       <TaskList
-        rows={rows}
+        rows={visibleRows}
         columns={columns}
         getStyles={getStyles}
         bodyRef={taskListBodyRef}
         onScroll={handleTaskListScroll}
         collapsedIds={collapsedIds}
         onToggleExpand={toggleExpand}
+        offsetTop={firstRow * rowHeight}
+        contentHeight={rows.length * rowHeight}
       />
 
       {/* Right Pane - Timeline */}
@@ -399,7 +420,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
             )}
 
             {/* Task rows with bars */}
-            {rows.map((row, index) => {
+            {visibleRows.map((row, i) => {
+              const index = firstRow + i;
               const task = getEffectiveTask(row);
               return (
                 <div
@@ -456,6 +478,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
               dragDelta={active && active.type !== 'link' ? active.deltaX : 0}
               linkPreview={linkPreview}
               criticalIds={criticalIds}
+              firstRow={firstRow}
+              lastRow={lastRow}
             />
           </div>
         </div>

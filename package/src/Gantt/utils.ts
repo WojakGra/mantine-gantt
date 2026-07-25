@@ -434,3 +434,30 @@ export function getCriticalPath(tasks: GanttTask[]): Set<string> {
   });
   return critical;
 }
+
+/**
+ * Row range `[first, last)` to render for a scroller of fixed-height rows.
+ *
+ * Both ends are aligned to blocks of `overscan` rows, with one extra block of slack on each
+ * side: the rendered set then only changes every `overscan` rows of scrolling instead of on
+ * every scroll event, which is what keeps rows from flickering as they come into view.
+ *
+ * `viewportHeight <= 0` means "not measured yet" (first paint, jsdom) — render everything,
+ * because rendering nothing would blank the chart on environments that never measure.
+ */
+export function visibleRowRange(
+  scrollTop: number,
+  viewportHeight: number,
+  rowHeight: number,
+  rowCount: number,
+  overscan = 5
+): [number, number] {
+  if (viewportHeight <= 0 || rowHeight <= 0) {
+    return [0, rowCount];
+  }
+  const firstVisible = Math.max(0, scrollTop) / rowHeight;
+  const lastVisible = (Math.max(0, scrollTop) + viewportHeight) / rowHeight;
+  const first = Math.max(0, (Math.floor(firstVisible / overscan) - 1) * overscan);
+  const last = Math.min(rowCount, (Math.ceil(lastVisible / overscan) + 1) * overscan);
+  return [Math.min(first, last), last];
+}

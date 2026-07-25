@@ -7,6 +7,7 @@ export const GanttStylesApi: StylesApiData<GanttFactory> = {
     taskList: 'Task list wrapper',
     taskListHeader: 'Task list header',
     taskListBody: 'Task list body',
+    taskListContent: 'Task list rows sizer (full list height, virtualization offset)',
     taskListRow: 'Task list row',
     taskListCell: 'Task list cell',
     expandChevron: 'Chevron toggling a parent row',

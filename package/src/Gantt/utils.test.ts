@@ -14,6 +14,7 @@ import {
   pixelsToDuration,
   pixelToDate,
   snapToGrid,
+  visibleRowRange,
   wouldCreateCycle,
 } from './utils';
 
@@ -508,5 +509,33 @@ describe('getEffectiveTask', () => {
       duration: 3,
       progress: 60,
     });
+  });
+});
+
+describe('visibleRowRange', () => {
+  it('renders everything when the viewport has not been measured', () => {
+    expect(visibleRowRange(0, 0, 44, 500)).toEqual([0, 500]);
+  });
+
+  it('covers the viewport plus overscan on both sides', () => {
+    // scrollTop 4400 = row 100; 440px viewport = 10 rows; overscan 5.
+    expect(visibleRowRange(4400, 440, 44, 500)).toEqual([95, 115]);
+  });
+
+  it('clamps to the ends of the list', () => {
+    expect(visibleRowRange(0, 440, 44, 500)).toEqual([0, 15]);
+    expect(visibleRowRange(21560, 440, 44, 500)).toEqual([485, 500]);
+  });
+
+  it('keeps the same range across a small scroll, so rows do not re-mount mid-scroll', () => {
+    // Both scroll positions sit inside the same block of `overscan` rows.
+    const a = visibleRowRange(4410, 440, 44, 500);
+    const b = visibleRowRange(4450, 440, 44, 500);
+    expect(b).toEqual(a);
+  });
+
+  it('never returns an inverted range when scrolled past the end', () => {
+    const [first, last] = visibleRowRange(100000, 440, 44, 500);
+    expect(last).toBeGreaterThanOrEqual(first);
   });
 });

@@ -472,3 +472,34 @@ describe('controlled / uncontrolled tasks', () => {
     );
   });
 });
+
+describe('task list width', () => {
+  const width = (container: HTMLElement) =>
+    (container.querySelector('[class*="root"]') as HTMLElement).style.getPropertyValue(
+      '--gantt-task-list-width'
+    );
+
+  it('sizes the panel from the columns when taskListWidth is omitted', () => {
+    // Default set: Task Name (flex, 200) + Start 90 + End 90 + Duration 80.
+    const { container } = render(<Gantt tasks={mockTasks} />);
+    expect(width(container)).toBe('460px');
+  });
+
+  it('sizes the panel from custom columns', () => {
+    const { container } = render(
+      <Gantt
+        tasks={mockTasks}
+        columns={[
+          { header: 'Name', render: (t) => t.label },
+          { header: 'Days', render: (t) => t.duration, width: 60 },
+        ]}
+      />
+    );
+    expect(width(container)).toBe('260px');
+  });
+
+  it('honours an explicit taskListWidth', () => {
+    const { container } = render(<Gantt tasks={mockTasks} taskListWidth={240} />);
+    expect(width(container)).toBe('240px');
+  });
+});

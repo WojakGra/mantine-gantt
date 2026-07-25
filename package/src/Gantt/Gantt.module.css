@@ -55,6 +55,13 @@
   display: none;
 }
 
+/* Sizer for row virtualization: full list height, the rows scrolled off above are
+   padding-top. Padding must NOT go on .taskListBody — it is a flex item, and padding is
+   added to its flex base size, so the header would be squeezed to nothing. */
+.taskListContent {
+  box-sizing: border-box;
+}
+
 .taskListRow {
   display: grid;
   height: var(--gantt-row-height, 44px);

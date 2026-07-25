@@ -13,6 +13,7 @@ A fully-featured Gantt chart component for [Mantine](https://mantine.dev/). Buil
 - 🎨 **Mantine Integration** - Full support for Mantine's styling API, themes, and CSS variables
 - 📱 **Responsive** - Works across different screen sizes with customizable column widths
 - ♿ **Accessible** - Keyboard navigation and ARIA attributes for screen readers
+- ⚡ **Virtualized rows** - Only the visible rows are rendered, so long task lists stay smooth
 - 🎯 **TypeScript** - Full type definitions included
 
 ## Installation
@@ -99,7 +100,7 @@ otherwise the bars will not move.
 | `onTasksChange` | `(tasks) => void`    | -        | Called with the full new list after any change  |
 | `columnWidth`   | `number`             | `40`     | Width of each day column in pixels              |
 | `rowHeight`     | `number`             | `44`     | Height of each task row in pixels               |
-| `taskListWidth` | `number`             | `320`    | Width of the task list panel in pixels          |
+| `taskListWidth` | `number`             | auto     | Panel width; auto = sum of `columns` widths     |
 | `weekStart`     | `0 \| 1`             | `1`      | First day of the week (0 = Sunday, 1 = Monday)  |
 | `showTitle`     | `boolean`            | `false`  | Show task title on hover                        |
 | `startDate`     | `Date`               | Auto     | Start date of the timeline                      |
