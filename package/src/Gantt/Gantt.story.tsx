@@ -567,3 +567,79 @@ export function Uncontrolled() {
     </div>
   );
 }
+
+const groupedTasks: GanttTask[] = [
+  { id: 'design', label: 'Design', startDate: '2026-02-02', duration: 1, progress: 0 },
+  {
+    id: 'wireframes',
+    label: 'Wireframes',
+    startDate: '2026-02-02',
+    duration: 4,
+    progress: 100,
+    parentId: 'design',
+  },
+  {
+    id: 'visuals',
+    label: 'Visual design',
+    startDate: '2026-02-06',
+    duration: 6,
+    progress: 60,
+    parentId: 'design',
+    color: 'violet',
+  },
+  { id: 'build', label: 'Build', startDate: '2026-02-12', duration: 1, progress: 0 },
+  {
+    id: 'api',
+    label: 'API',
+    startDate: '2026-02-12',
+    duration: 8,
+    progress: 40,
+    parentId: 'build',
+    dependencies: ['wireframes'],
+    color: 'orange',
+  },
+  {
+    id: 'ui',
+    label: 'UI',
+    startDate: '2026-02-16',
+    duration: 10,
+    progress: 10,
+    parentId: 'build',
+    dependencies: ['visuals'],
+  },
+  {
+    id: 'auth',
+    label: 'Auth screens',
+    startDate: '2026-02-16',
+    duration: 5,
+    progress: 0,
+    parentId: 'ui',
+    color: 'teal',
+  },
+  {
+    id: 'launch',
+    label: 'Launch',
+    startDate: '2026-02-26',
+    duration: 2,
+    progress: 0,
+    dependencies: ['ui'],
+    color: 'green',
+  },
+];
+
+export function Grouping() {
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt defaultTasks={groupedTasks} />
+    </div>
+  );
+}
+
+export function GroupingCollapsed() {
+  // Only 'design' is expanded initially; 'build' (and its subtree) starts collapsed.
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt defaultTasks={groupedTasks} defaultExpandedIds={['design']} />
+    </div>
+  );
+}
