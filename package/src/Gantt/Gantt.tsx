@@ -38,7 +38,7 @@ const EMPTY_CRITICAL = new Set<string>();
 // Width given to a column that declares none, when the panel width is auto-sized.
 const FLEX_COLUMN_WIDTH = 200;
 
-/** Panel width when `taskListWidth` is omitted — wide enough that no column is crushed. */
+/** Panel width when `taskListWidth` is omitted - wide enough that no column is crushed. */
 function autoTaskListWidth(columns: GanttColumn[] = defaultColumns) {
   return columns.reduce((sum, col) => sum + (col.width ?? FLEX_COLUMN_WIDTH), 0);
 }
@@ -134,7 +134,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     }
   }, [viewMode, columnWidth]);
 
-  // Controlled (`tasks` + `onTasksChange`) or uncontrolled (`defaultTasks`) — in controlled
+  // Controlled (`tasks` + `onTasksChange`) or uncontrolled (`defaultTasks`) - in controlled
   // mode nothing is stored here, every change goes out through onTasksChange.
   const [tasks, setTasks] = useUncontrolled<GanttTask[]>({
     value: tasksProp,
@@ -178,7 +178,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   // Recomputed only when tasks settle (drag commits) or collapse toggles.
   const rows = useMemo(() => buildTaskTree(tasks, collapsedIds), [tasks, collapsedIds]);
 
-  // Critical path (CPM over dependencies) — only recomputed when tasks settle (drag commits),
+  // Critical path (CPM over dependencies) - only recomputed when tasks settle (drag commits),
   // not live during drag.
   const criticalIds = useMemo(
     () => (highlightCriticalPath ? getCriticalPath(tasks) : EMPTY_CRITICAL),
@@ -197,7 +197,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   const timelineHeaderRef = useRef<HTMLDivElement>(null);
   const timelineContentRef = useRef<HTMLDivElement>(null);
 
-  // All drag interactions (move / resize / link) on plain pointer events — no @dnd-kit.
+  // All drag interactions (move / resize / link) on plain pointer events - no @dnd-kit.
   const drag = useGanttDrag({
     tasks,
     commitTasks: setTasks,
@@ -236,7 +236,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
   // Freeze bounds while dragging so the axis doesn't reflow under the cursor. The origin
   // (start) never moves during a drag; only the END grows so dragging into the future has
-  // room to auto-scroll into. Computed purely in a memo — no ref writes during render.
+  // room to auto-scroll into. Computed purely in a memo - no ref writes during render.
   // The 30-day buffer dwarfs typical back-and-forth movement, so letting the end shrink
   // again when the pointer moves left is invisible in practice.
   const bounds = useMemo(() => {
@@ -265,13 +265,13 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
   // Row virtualization: rows are a fixed height, so the visible slice is pure arithmetic.
   // Both panes render only [firstRow, lastRow); the rest is padding/absolute offset, which
-  // keeps scrollHeight — and therefore the scroll sync — unchanged.
+  // keeps scrollHeight - and therefore the scroll sync - unchanged.
   const [firstRow, lastRow] = visibleRowRange(scrollTop, viewport.height, rowHeight, rows.length);
   const visibleRows = rows.slice(firstRow, lastRow);
 
   // Sync scroll between task list and timeline. `echoRef` remembers the value we assigned
   // programmatically, so the scroll event fired by that very assignment can be recognized
-  // and ignored — without it, the two handlers would echo back and forth. Matching on the
+  // and ignored - without it, the two handlers would echo back and forth. Matching on the
   // value (not a boolean flag) means a swallowed echo can never eat a real user scroll.
   const echoRef = useRef<{ source: 'timeline' | 'list'; value: number } | null>(null);
 
@@ -342,7 +342,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
   // Drag-to-pan the timeline with the mouse on empty space (the scrollbar is hidden). Bars and
   // handles stopPropagation on pointerdown, so any pointerdown reaching here is empty canvas.
-  // Touch/pen keep native scroll+momentum — only mouse lacks a grab affordance.
+  // Touch/pen keep native scroll+momentum - only mouse lacks a grab affordance.
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const handlePanStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const body = timelineBodyRef.current;
@@ -373,7 +373,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   }, []);
 
   // Keep the viewport visually pinned whenever the timeline origin (bounds.start)
-  // shifts — e.g. when bounds re-tighten on drag end. A date sits at pixel
+  // shifts - e.g. when bounds re-tighten on drag end. A date sits at pixel
   // (date - start) * columnWidth; if start moves by N days, every position shifts by
   // N * columnWidth, so counter-scroll by the same amount.
   const prevStartRef = useRef(bounds.start);

@@ -27,9 +27,9 @@ export interface UseGanttDragOptions {
   commitTasks: (next: GanttTask[]) => void;
   /** Effective column width in px (already adjusted for viewMode). */
   columnWidth: number;
-  /** Scroll container — drives scroll-adjusted delta and auto-scroll. */
+  /** Scroll container - drives scroll-adjusted delta and auto-scroll. */
   bodyRef: React.RefObject<HTMLDivElement | null>;
-  /** Positioned content — its rect maps client coords to timeline pixels. */
+  /** Positioned content - its rect maps client coords to timeline pixels. */
   contentRef: React.RefObject<HTMLDivElement | null>;
   onTaskUpdate?: (task: GanttTask) => void;
   onLinkCreate?: (fromTaskId: string, toTaskId: string) => void;
@@ -62,7 +62,7 @@ export interface UseGanttDragReturn {
 
 /**
  * Owns every drag interaction (move / resize-start / resize-end / link) on plain pointer
- * events — no @dnd-kit. pointerdown → document pointermove → pointerup, snapping to whole
+ * events - no @dnd-kit. pointerdown → document pointermove → pointerup, snapping to whole
  * days only on release. Auto-scrolls the viewport near its edges and keeps delta correct
  * across that scroll, so the bar follows the cursor. Modeled on @mantine/schedule's
  * use-horizontal-event-resize + use-auto-scroll-on-drag.
@@ -200,7 +200,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
     [recompute, updateAutoScroll]
   );
 
-  // Callbacks fire here, never inside a state updater — React StrictMode invokes updaters
+  // Callbacks fire here, never inside a state updater - React StrictMode invokes updaters
   // twice, which would double-fire onTaskUpdate/onLinkCreate for a single drag.
   const commit = useCallback((drag: DragRef) => {
     const {
@@ -328,7 +328,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       };
       document.addEventListener('pointermove', handlePointerMove);
       document.addEventListener('pointerup', handlePointerUp);
-      // pointercancel: the OS/browser can take the gesture over (touch scrolling, alerts) —
+      // pointercancel: the OS/browser can take the gesture over (touch scrolling, alerts) -
       // treat it like pointerup so cursors/listeners/auto-scroll never stay stuck.
       document.addEventListener('pointercancel', handlePointerUp);
     },

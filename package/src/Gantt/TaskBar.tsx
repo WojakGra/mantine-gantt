@@ -72,8 +72,8 @@ function TaskBarComponent({
   }
 
   const tooltipLabel = isMilestone
-    ? `${task.label} — ${formatTaskDate(task.startDate)}`
-    : `${task.label} — ${formatTaskDate(task.startDate)} → ${formatTaskDate(
+    ? `${task.label} - ${formatTaskDate(task.startDate)}`
+    : `${task.label} - ${formatTaskDate(task.startDate)} → ${formatTaskDate(
         getTaskEndDate(task.startDate, task.duration)
       )}${task.progress > 0 ? ` (${task.progress}%)` : ''}`;
 
@@ -180,7 +180,7 @@ function TaskBarComponent({
 }
 
 // Custom comparison to prevent re-renders when task data hasn't changed. Every callback is
-// compared too — they are part of the props contract, and skipping them would let a bar
+// compared too - they are part of the props contract, and skipping them would let a bar
 // keep calling a stale closure (e.g. an old onTaskClick) after its parent re-rendered.
 function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolean {
   return (

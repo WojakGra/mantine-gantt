@@ -9,7 +9,7 @@ const CORNER_OFFSET = 10;
 const ELBOW_RADIUS = 6;
 
 interface DependencyLinksProps {
-  /** Visible rows in render order — hidden tasks get no arrows. */
+  /** Visible rows in render order - hidden tasks get no arrows. */
   rows: GanttTreeRow[];
   startDate: Dayjs;
   columnWidth: number;
@@ -156,7 +156,7 @@ export function DependencyLinks({
     <svg {...getStyles('dependencyLinks')}>
       <defs>
         {/* A single marker: the arrowhead paints itself with `context-stroke` (see CSS),
-            so it always matches the referencing line — base color, :hover and critical
+            so it always matches the referencing line - base color, :hover and critical
             alike. markerUnits=userSpaceOnUse keeps the head the same size regardless of
             stroke-width, so thicker critical lines don't get oversized heads. */}
         <marker
@@ -219,7 +219,7 @@ export function DependencyLinks({
 /**
  * Orthogonal routing between the source bar's right edge and the target bar's left edge:
  * exit right, route through the gap between the two rows, enter left. Used for every
- * link, including backward ones (target starts before the source ends) — there the
+ * link, including backward ones (target starts before the source ends) - there the
  * horizontal segment simply runs behind the bars in between, which is fine because the
  * links SVG renders below the bars (z-index 1 vs 10).
  *
@@ -266,7 +266,7 @@ function roundCorners(points: Array<[number, number]>, radius = 6): string {
     const [x, y] = points[i];
     const [nextX, nextY] = points[i + 1];
 
-    // Distance available on each side of the corner — clamp so a curve never eats a
+    // Distance available on each side of the corner - clamp so a curve never eats a
     // whole short segment (e.g. the little stub before the arrowhead).
     const inLen = Math.hypot(x - prevX, y - prevY);
     const outLen = Math.hypot(nextX - x, nextY - y);

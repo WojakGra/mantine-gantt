@@ -14,7 +14,7 @@
 
 ## Minimal component (no styles API)
 
-When you don't need theming/Styles API support — just Box + useProps.
+When you don't need theming/Styles API support - just Box + useProps.
 
 ```tsx
 import { Box, BoxProps, ElementProps, factory, Factory, useProps } from '@mantine/core';
@@ -412,7 +412,7 @@ MySelect.displayName = '@mantine/core/MySelect';
 
 Components built with `factory()` automatically get `.extend()` and `.withProps()`.
 
-**`.extend()`** — for theme-level configuration in `createTheme`:
+**`.extend()`** - for theme-level configuration in `createTheme`:
 
 ```tsx
 const theme = createTheme({
@@ -445,7 +445,7 @@ const theme = createTheme({
 });
 ```
 
-**`.withProps()`** — create a pre-configured variant at the call site:
+**`.withProps()`** - create a pre-configured variant at the call site:
 
 ```tsx
 const BigMyComponent = MyComponent.withProps({ size: 'xl', radius: 'lg' });

@@ -12,7 +12,7 @@ import * as demos from './demos';
 ## Custom columns & click-to-open modal
 
 Pass `columns` to customize the left panel (the default columns are Task Name, Start,
-End and Duration). Use `onTaskClick` to react to clicks — here it opens a modal with
+End and Duration). Use `onTaskClick` to react to clicks - here it opens a modal with
 task details.
 
 <Demo data={demos.modal} />
@@ -22,7 +22,7 @@ task details.
 Set `parentId` on a task and it becomes a child row. A task that has children renders as a
 summary bar: it spans its whole subtree and shows a duration-weighted average progress, so the
 dates you give a parent are only a placeholder. Nesting goes as deep as you need. Rows are
-collapsible via the chevron — `defaultExpandedIds` picks which parents start open (omit it and
+collapsible via the chevron - `defaultExpandedIds` picks which parents start open (omit it and
 everything is open), and `onToggleExpand` reports each toggle.
 
 <Demo data={demos.grouping} />
@@ -39,14 +39,14 @@ still snap to whole days. `weekStart` controls the header's week numbering and t
 
 `highlightCriticalPath` runs CPM over the dependency graph and paints the zero-slack tasks and
 links with `criticalPathColor`. Independently, any task with a `baseline` gets a thin planned bar
-underneath the actual one — turn those off with `showBaselines={false}`.
+underneath the actual one - turn those off with `showBaselines={false}`.
 
 <Demo data={demos.criticalPath} />
 
 ## Milestones
 
 Set `type: 'milestone'` on a task to render it as a diamond instead of a bar. A milestone is a
-zero-length marker pinned to its start day — it can be dragged and linked like any task, but it
+zero-length marker pinned to its start day - it can be dragged and linked like any task, but it
 cannot be resized and its `duration` is ignored for rendering. Milestones participate in the
 critical path calculation and in auto-scheduling like regular tasks.
 
@@ -69,7 +69,7 @@ mirroring how link creation works.
 
 ## Controlled and uncontrolled
 
-Pass `defaultTasks` and the component owns the task list (uncontrolled) — this is what the demos
+Pass `defaultTasks` and the component owns the task list (uncontrolled) - this is what the demos
 above do. Pass `tasks` together with `onTasksChange` and your own state is the single source of
 truth (controlled): the component keeps no copy, so a dragged bar only moves once the new `tasks`
 prop arrives. Use this mode to drive the chart from a query cache, a store, or an undo/redo stack.
@@ -80,7 +80,7 @@ const [tasks, setTasks] = useState(initialTasks);
 <Gantt tasks={tasks} onTasksChange={setTasks} />;
 ```
 
-`onTaskUpdate`, `onLinkCreate` and `onLinkDelete` keep working in both modes — they fire
+`onTaskUpdate`, `onLinkCreate` and `onLinkDelete` keep working in both modes - they fire
 alongside `onTasksChange`, not instead of it.
 
 Migrating from 0.2.x: `<Gantt tasks={x} />` becomes `<Gantt defaultTasks={x} />`.

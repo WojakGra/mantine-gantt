@@ -4,7 +4,7 @@ import { render, screen } from '@mantine-tests/core';
 import { Gantt, GanttTask } from './index';
 
 // jsdom has no PointerEvent, so fireEvent.pointer* drops clientX. Dispatch a plain bubbling
-// Event with clientX attached — React reads nativeEvent.clientX and native listeners read it too.
+// Event with clientX attached - React reads nativeEvent.clientX and native listeners read it too.
 // Wrapped in act() so the resulting state updates (and onTaskUpdate) flush before assertions.
 function pointer(node: Element | Document, type: string, clientX: number) {
   act(() => {
@@ -683,7 +683,7 @@ describe('auto-scheduling', () => {
 
     const next = onTasksChange.mock.calls[0][0] as GanttTask[];
     expect(next.find((t) => t.id === 'b')!.startDate).toBe('2026-02-04');
-    // Parent ignored the change — bar stays put.
+    // Parent ignored the change - bar stays put.
     expect(container.querySelector('[data-task-id="b"]')!.getAttribute('aria-label')).toContain(
       'starts 2026-02-01'
     );

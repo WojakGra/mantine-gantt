@@ -56,7 +56,7 @@
 }
 
 /* Sizer for row virtualization: full list height, the rows scrolled off above are
-   padding-top. Padding must NOT go on .taskListBody — it is a flex item, and padding is
+   padding-top. Padding must NOT go on .taskListBody - it is a flex item, and padding is
    added to its flex base size, so the header would be squeezed to nothing. */
 .taskListContent {
   box-sizing: border-box;
@@ -611,7 +611,7 @@ g:hover .dependencyLine:not([data-hit]) {
 
 .linkArrow {
   /* context-stroke makes the arrowhead inherit the stroke color of the line that
-     references the marker — including :hover and [data-critical] states, which plain
+     references the marker - including :hover and [data-critical] states, which plain
      CSS can't reach (marker content lives in <defs> and doesn't match selectors on
      the referencing element). Fallback for older browsers is a neutral gray. */
   fill: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));

@@ -59,7 +59,7 @@ function App() {
 
 `Gantt` works in either mode, following the usual Mantine convention.
 
-**Uncontrolled** — pass `defaultTasks` and the component owns the task list. Drag, resize, link
+**Uncontrolled** - pass `defaultTasks` and the component owns the task list. Drag, resize, link
 and keyboard edits are applied internally; `onTaskUpdate` / `onLinkCreate` / `onTasksChange` still
 report them.
 
@@ -67,7 +67,7 @@ report them.
 <Gantt defaultTasks={tasks} onTaskUpdate={(task) => save(task)} />
 ```
 
-**Controlled** — pass `tasks` and `onTasksChange`, and your store is the single source of truth.
+**Controlled** - pass `tasks` and `onTasksChange`, and your store is the single source of truth.
 The component keeps no copy: after a drag the bar lands wherever the new `tasks` prop puts it, so
 if you ignore the change the bar snaps back. That is what makes external stores (TanStack Query,
 Redux, undo/redo) work.
@@ -88,26 +88,26 @@ controlled value. To keep the 0.2 behaviour, rename the prop:
 +<Gantt defaultTasks={tasks} />
 ```
 
-Keep `tasks` only if you also pass `onTasksChange` (or otherwise update the prop yourself) —
+Keep `tasks` only if you also pass `onTasksChange` (or otherwise update the prop yourself) -
 otherwise the bars will not move.
 
 ## Props
 
-| Prop            | Type                 | Default  | Description                                     |
-| --------------- | -------------------- | -------- | ----------------------------------------------- |
-| `tasks`         | `GanttTask[]`        | -        | Tasks to display (controlled)                   |
-| `defaultTasks`  | `GanttTask[]`        | -        | Initial tasks (uncontrolled)                    |
-| `onTasksChange` | `(tasks) => void`    | -        | Called with the full new list after any change  |
-| `columnWidth`   | `number`             | `40`     | Width of each day column in pixels              |
-| `rowHeight`     | `number`             | `44`     | Height of each task row in pixels               |
-| `taskListWidth` | `number`             | auto     | Panel width; auto = sum of `columns` widths     |
-| `weekStart`     | `0 \| 1`             | `1`      | First day of the week (0 = Sunday, 1 = Monday)  |
-| `showTitle`     | `boolean`            | `false`  | Show task title on hover                        |
-| `startDate`     | `Date`               | Auto     | Start date of the timeline                      |
-| `endDate`       | `Date`               | Auto     | End date of the timeline                        |
-| `onTaskUpdate`  | `(task) => void`     | -        | Callback when a task is updated                 |
-| `onTaskClick`   | `(task) => void`     | -        | Callback when a task is clicked                 |
-| `onLinkCreate`  | `(from, to) => void` | -        | Callback when a dependency is created           |
+| Prop            | Type                 | Default | Description                                    |
+| --------------- | -------------------- | ------- | ---------------------------------------------- |
+| `tasks`         | `GanttTask[]`        | -       | Tasks to display (controlled)                  |
+| `defaultTasks`  | `GanttTask[]`        | -       | Initial tasks (uncontrolled)                   |
+| `onTasksChange` | `(tasks) => void`    | -       | Called with the full new list after any change |
+| `columnWidth`   | `number`             | `40`    | Width of each day column in pixels             |
+| `rowHeight`     | `number`             | `44`    | Height of each task row in pixels              |
+| `taskListWidth` | `number`             | auto    | Panel width; auto = sum of `columns` widths    |
+| `weekStart`     | `0 \| 1`             | `1`     | First day of the week (0 = Sunday, 1 = Monday) |
+| `showTitle`     | `boolean`            | `false` | Show task title on hover                       |
+| `startDate`     | `Date`               | Auto    | Start date of the timeline                     |
+| `endDate`       | `Date`               | Auto    | End date of the timeline                       |
+| `onTaskUpdate`  | `(task) => void`     | -       | Callback when a task is updated                |
+| `onTaskClick`   | `(task) => void`     | -       | Callback when a task is clicked                |
+| `onLinkCreate`  | `(from, to) => void` | -       | Callback when a dependency is created          |
 
 ## Task Object
 

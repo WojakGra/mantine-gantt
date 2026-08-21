@@ -24,7 +24,7 @@ export interface GanttTask {
   /** Progress percentage (0-100) */
   progress: number;
   /**
-   * Kind of row: a regular schedulable `'task'` (default) or a `'milestone'` — a
+   * Kind of row: a regular schedulable `'task'` (default) or a `'milestone'` - a
    * zero-length marker rendered as a diamond. Milestones cannot be resized (their
    * duration is ignored for rendering) but can be moved and linked like tasks.
    */
@@ -106,13 +106,13 @@ export type GanttCssVariables = {
 
 export interface GanttBaseProps {
   /**
-   * Tasks to display — controlled mode. The component keeps no copy of its own: every
+   * Tasks to display - controlled mode. The component keeps no copy of its own: every
    * drag/resize/link/keyboard change is reported through `onTasksChange` and the bars only
    * move once this prop comes back updated.
    */
   tasks?: GanttTask[];
 
-  /** Initial tasks — uncontrolled mode. The component owns the task list from then on. */
+  /** Initial tasks - uncontrolled mode. The component owns the task list from then on. */
   defaultTasks?: GanttTask[];
 
   /** Called with the full new task list after any change (drag, resize, link, keyboard) */
@@ -147,7 +147,7 @@ export interface GanttBaseProps {
   rowHeight?: number;
 
   /**
-   * Width of the task list panel in pixels. Omitted: computed from `columns` — fixed columns
+   * Width of the task list panel in pixels. Omitted: computed from `columns` - fixed columns
    * at their `width`, flexible ones at 200px (so the default set gives 460px). Set it only to
    * override; a value narrower than the columns need squeezes the flexible column.
    */
@@ -156,15 +156,15 @@ export interface GanttBaseProps {
   /**
    * Start date of the timeline, defaults to earliest task start - 7 days.
    * Interpreted as a local calendar day (its local getFullYear/getMonth/getDate), so
-   * construct it with `new Date(year, monthIndex, day)` — or otherwise ensure it is local
-   * midnight — rather than `new Date('YYYY-MM-DD')`, which is UTC midnight and can resolve
+   * construct it with `new Date(year, monthIndex, day)` - or otherwise ensure it is local
+   * midnight - rather than `new Date('YYYY-MM-DD')`, which is UTC midnight and can resolve
    * to the previous local day in timezones behind UTC.
    */
   startDate?: Date;
 
   /**
    * End date of the timeline, defaults to latest task end + 7 days.
-   * Interpreted as a local calendar day — see `startDate` for construction guidance.
+   * Interpreted as a local calendar day - see `startDate` for construction guidance.
    */
   endDate?: Date;
 
@@ -172,7 +172,7 @@ export interface GanttBaseProps {
   viewMode?: 'day' | 'week' | 'month';
 
   /**
-   * First day of the week — 0 = Sunday, 1 = Monday, default 1. Drives both the week numbers
+   * First day of the week - 0 = Sunday, 1 = Monday, default 1. Drives both the week numbers
    * in the header (ISO numbering) and the week separators in the grid.
    */
   weekStart?: 0 | 1;

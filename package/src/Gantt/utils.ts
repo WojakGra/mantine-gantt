@@ -103,7 +103,7 @@ export function generateWeekHeaders(
     const label = actualStart.format('MMM');
 
     // isoWeek() numbers Monday-based weeks, so a Sunday-start week takes the number
-    // of the Monday it contains — otherwise its Sunday would report the previous week.
+    // of the Monday it contains - otherwise its Sunday would report the previous week.
     const weekNumber = current.add(weekStart === 0 ? 1 : 0, 'day').isoWeek();
 
     weeks.push({
@@ -142,7 +142,7 @@ export function calculateTimelineBounds(
   }
 
   if (tasks.length === 0) {
-    // Today is only the fallback — an explicitly passed bound always wins.
+    // Today is only the fallback - an explicitly passed bound always wins.
     const today = dayjs();
     return {
       start: startDate ? normalize(startDate) : today.subtract(padding, 'day'),
@@ -199,7 +199,7 @@ export function getTaskEndDate(startDate: string, duration: number): Dayjs {
 }
 
 /**
- * True when making `toId` depend on `fromId` would close a dependency cycle — i.e. `fromId`
+ * True when making `toId` depend on `fromId` would close a dependency cycle - i.e. `fromId`
  * already depends on `toId`, directly or transitively. Self-links count as a cycle. Tolerates
  * an already-cyclic input graph (visited set), unknown ids are ignored.
  */
@@ -353,7 +353,7 @@ export function getEffectiveTask(row: GanttTreeRow): GanttTask {
  * (summary parents) are excluded from the graph entirely.
  */
 export function getCriticalPath(tasks: GanttTask[]): Set<string> {
-  // Summary parents are excluded from the CPM graph — only leaves carry a real
+  // Summary parents are excluded from the CPM graph - only leaves carry a real
   // schedule. A dependency edge pointing at a parent id then behaves like an
   // unknown id and is ignored.
   const leafTasks = buildTaskTree(tasks, new Set())
@@ -482,7 +482,7 @@ export function buildSuccessorMap(tasks: GanttTask[]): Map<string, string[]> {
 /**
  * Auto-scheduling cascade: after `movedTaskId` moved/resized, push every transitive
  * finish-to-start successor so it never starts before its predecessors end. Only leaves
- * are cascaded — summary parents derive their schedule from children. Returns the input
+ * are cascaded - summary parents derive their schedule from children. Returns the input
  * array unchanged when nothing needs to move. Assumes an acyclic dependency graph
  * (guaranteed upstream by wouldCreateCycle); tolerates cyclic input without hanging by
  * cascading only the DAG-reachable, topologically ordered part.
@@ -551,7 +551,7 @@ export function applyAutoSchedule(tasks: GanttTask[], movedTaskId: string): Gant
  * side: the rendered set then only changes every `overscan` rows of scrolling instead of on
  * every scroll event, which is what keeps rows from flickering as they come into view.
  *
- * `viewportHeight <= 0` means "not measured yet" (first paint, jsdom) — render everything,
+ * `viewportHeight <= 0` means "not measured yet" (first paint, jsdom) - render everything,
  * because rendering nothing would blank the chart on environments that never measure.
  */
 export function visibleRowRange(

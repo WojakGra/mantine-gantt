@@ -728,7 +728,7 @@ export function AutoSchedule() {
 
   return (
     <div style={{ padding: 20, height: 400 }}>
-      {/* Drag or resize any task — its successors shift to keep the chain valid. */}
+      {/* Drag or resize any task - its successors shift to keep the chain valid. */}
       <Gantt defaultTasks={chainTasks} autoSchedule showTitle />
     </div>
   );

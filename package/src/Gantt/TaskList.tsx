@@ -15,7 +15,7 @@ export const defaultColumns: GanttColumn[] = [
 ];
 
 interface TaskListProps {
-  /** Only the rows in the visible range — see `offsetTop` / `contentHeight`. */
+  /** Only the rows in the visible range - see `offsetTop` / `contentHeight`. */
   rows: GanttTreeRow[];
   columns?: GanttColumn[];
   getStyles: GetStylesApi<GanttFactory>;
@@ -25,7 +25,7 @@ interface TaskListProps {
   onToggleExpand: (taskId: string) => void;
   /** Height of the rows scrolled off above the visible range. */
   offsetTop: number;
-  /** Height of the whole list, visible or not — keeps scrollHeight in sync with the timeline. */
+  /** Height of the whole list, visible or not - keeps scrollHeight in sync with the timeline. */
   contentHeight: number;
 }
 
@@ -41,7 +41,7 @@ export function TaskList({
   contentHeight,
 }: TaskListProps) {
   // Flex the first flexible column, fix the rest to their width. Set inline because the
-  // column set is runtime data — same pattern as the timeline's inline geometry.
+  // column set is runtime data - same pattern as the timeline's inline geometry.
   const gridTemplateColumns = columns.map((c) => (c.width ? `${c.width}px` : '1fr')).join(' ');
 
   return (
