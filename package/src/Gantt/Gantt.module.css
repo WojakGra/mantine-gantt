@@ -344,6 +344,32 @@
   outline-offset: 2px;
 }
 
+/* Milestone: zero-length marker rendered as a diamond centered on its start day.
+   The bar itself is transparent; the diamond carries the color. */
+.taskBar[data-milestone] {
+  background-color: transparent;
+  box-shadow: none;
+  justify-content: center;
+}
+
+.milestone {
+  width: calc((var(--gantt-row-height) - 16px) * 0.7);
+  height: calc((var(--gantt-row-height) - 16px) * 0.7);
+  background-color: var(--task-bar-color, var(--mantine-primary-color-filled));
+  transform: rotate(45deg);
+  border-radius: 2px;
+  box-shadow: var(--mantine-shadow-xs);
+  pointer-events: none;
+}
+
+.taskBar[data-milestone][data-critical] .milestone {
+  background-color: var(--gantt-critical-color);
+}
+
+.taskBar[data-milestone][data-dragging] {
+  opacity: 0.9;
+}
+
 .taskBar[data-dragging] {
   cursor: grabbing;
   box-shadow: var(--mantine-shadow-md);
@@ -551,7 +577,16 @@
     stroke-width 150ms ease;
 }
 
-.dependencyLine:hover {
+/* Invisible fat overlay widening the click target of the visible line above it. */
+.dependencyLine[data-hit] {
+  stroke: transparent;
+  stroke-width: 12;
+  cursor: pointer;
+}
+
+/* Hover is driven from the hit overlay (it sits on top), restyled onto its visible
+   sibling via :hover on the group. */
+g:hover .dependencyLine:not([data-hit]) {
   stroke: light-dark(var(--mantine-color-gray-8), var(--mantine-color-gray-4));
   stroke-width: 2.5;
 }

@@ -26,4 +26,6 @@ export {
   generateDayHeaders,
   generateWeekHeaders,
   wouldCreateCycle,
+  buildSuccessorMap,
+  applyAutoSchedule,
 } from './utils';

@@ -53,6 +53,7 @@ const defaultProps: Partial<GanttProps> = {
   highlightCriticalPath: false,
   criticalPathColor: 'red',
   showBaselines: true,
+  autoSchedule: false,
 };
 
 const varsResolver = createVarsResolver<GanttFactory>(
@@ -84,11 +85,13 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     onTaskUpdate,
     onTaskClick,
     onLinkCreate,
+    onLinkDelete,
     columnWidth = 40,
     rowHeight = 44,
     taskListWidth,
     showTitle,
     showTodayMarker,
+    autoSchedule,
     startDate,
     endDate,
     viewMode = 'day',
@@ -203,9 +206,27 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     contentRef: timelineContentRef,
     onTaskUpdate,
     onLinkCreate,
+    onLinkDelete,
+    autoSchedule,
     announce: setAnnouncement,
   });
   const active = drag.state;
+
+  // Clicking a rendered dependency line deletes the link: the target's `dependencies`
+  // loses the source id, mirroring how onLinkCreate adds it.
+  const handleLinkDelete = useCallback(
+    (fromTaskId: string, toTaskId: string) => {
+      setTasks(
+        tasks.map((task) =>
+          task.id === toTaskId
+            ? { ...task, dependencies: (task.dependencies ?? []).filter((id) => id !== fromTaskId) }
+            : task
+        )
+      );
+      onLinkDelete?.(fromTaskId, toTaskId);
+    },
+    [tasks, setTasks, onLinkDelete]
+  );
 
   // Calculate timeline bounds
   const calculatedBounds = useMemo(
@@ -480,6 +501,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                     nudge={drag.nudge}
                     onTaskClick={handleTaskClick}
                     isCritical={criticalIds.has(task.id)}
+                    showTooltip={showTitle}
                   />
 
                   {showBaselines && task.baseline && (
@@ -514,6 +536,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
               criticalIds={criticalIds}
               firstRow={firstRow}
               lastRow={lastRow}
+              onLinkClick={handleLinkDelete}
             />
           </div>
         </div>

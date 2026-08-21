@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GanttDragType, GanttTask } from './types';
-import { snapToGrid, wouldCreateCycle } from './utils';
+import { applyAutoSchedule, snapToGrid, wouldCreateCycle } from './utils';
 
 // Auto-scroll tuning (mirrors @mantine/schedule's use-auto-scroll-on-drag).
 const EDGE_THRESHOLD = 50;
@@ -33,6 +33,9 @@ export interface UseGanttDragOptions {
   contentRef: React.RefObject<HTMLDivElement | null>;
   onTaskUpdate?: (task: GanttTask) => void;
   onLinkCreate?: (fromTaskId: string, toTaskId: string) => void;
+  onLinkDelete?: (fromTaskId: string, toTaskId: string) => void;
+  /** Cascade finish-to-start successors after a move/resize commit. */
+  autoSchedule?: boolean;
   /** Push a message to the aria-live region (drag/keyboard commits). */
   announce?: (message: string) => void;
 }
@@ -200,8 +203,16 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
   // Callbacks fire here, never inside a state updater — React StrictMode invokes updaters
   // twice, which would double-fire onTaskUpdate/onLinkCreate for a single drag.
   const commit = useCallback((drag: DragRef) => {
-    const { tasks, commitTasks, columnWidth, onTaskUpdate, onLinkCreate, announce, bodyRef } =
-      optsRef.current;
+    const {
+      tasks,
+      commitTasks,
+      columnWidth,
+      onTaskUpdate,
+      onLinkCreate,
+      autoSchedule,
+      announce,
+      bodyRef,
+    } = optsRef.current;
 
     if (drag.type === 'link') {
       const el = document.elementFromPoint(drag.lastClientX, drag.lastClientY);
@@ -237,7 +248,14 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       return;
     }
 
-    const next = tasks.map((task) => {
+    const dragged = tasks.find((t) => t.id === drag.taskId);
+    const isMilestone = dragged?.type === 'milestone';
+    // Milestones have no length: resize is a no-op (TaskBar hides the handles too).
+    if (isMilestone && drag.type !== 'move') {
+      return;
+    }
+
+    let next = tasks.map((task) => {
       if (task.id !== drag.taskId) {
         return task;
       }
@@ -257,6 +275,12 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
         duration: Math.max(1, task.duration - days),
       };
     });
+
+    // Cascade finish-to-start successors so they never start before this task ends.
+    if (autoSchedule) {
+      next = applyAutoSchedule(next, drag.taskId);
+    }
+
     commitTasks(next);
 
     const updated = next.find((t) => t.id === drag.taskId);
@@ -333,8 +357,13 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
   );
 
   const nudge = useCallback((taskId: string, action: 'move' | 'resize', days: number) => {
-    const { tasks, commitTasks, onTaskUpdate, announce } = optsRef.current;
-    const next = tasks.map((task) => {
+    const { tasks, commitTasks, onTaskUpdate, autoSchedule, announce } = optsRef.current;
+    const dragged = tasks.find((t) => t.id === taskId);
+    // Milestones have no length: resize is a no-op (TaskBar ignores Shift+Arrow too).
+    if (action === 'resize' && dragged?.type === 'milestone') {
+      return;
+    }
+    let next = tasks.map((task) => {
       if (task.id !== taskId) {
         return task;
       }
@@ -346,6 +375,9 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       }
       return { ...task, duration: Math.max(1, task.duration + days) };
     });
+    if (autoSchedule) {
+      next = applyAutoSchedule(next, taskId);
+    }
     commitTasks(next);
 
     const updated = next.find((t) => t.id === taskId);

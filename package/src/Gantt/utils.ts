@@ -160,6 +160,7 @@ export function calculateTimelineBounds(
     if (taskStart.isBefore(earliest)) {
       earliest = taskStart;
     }
+    // getTaskEndDate clamps to ≥ start, so this can never move `latest` backwards.
     if (taskEnd.isAfter(latest)) {
       latest = taskEnd;
     }
@@ -190,10 +191,11 @@ export function formatTaskDate(date: string | Date | Dayjs): string {
 }
 
 /**
- * Calculate end date from start date and duration
+ * Calculate end date from start date and duration. Duration is inclusive of the start
+ * day; a milestone (duration 0) starts and ends on the same day.
  */
 export function getTaskEndDate(startDate: string, duration: number): Dayjs {
-  return dayjs(startDate).add(duration - 1, 'day');
+  return dayjs(startDate).add(Math.max(0, duration - 1), 'day');
 }
 
 /**
@@ -433,6 +435,113 @@ export function getCriticalPath(tasks: GanttTask[]): Set<string> {
     }
   });
   return critical;
+}
+
+/**
+ * Map of task id → ids of tasks that depend on it (successors). Unknown dependency ids
+ * are ignored; edges that would close a cycle are skipped, so the result is always a DAG
+ * even for cyclic input. Shared by CPM and auto-scheduling.
+ */
+export function buildSuccessorMap(tasks: GanttTask[]): Map<string, string[]> {
+  const successors = new Map<string, string[]>();
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+
+  // True when `fromId` already depends on `toId`, directly or transitively.
+  const dependsOn = (fromId: string, toId: string): boolean => {
+    if (fromId === toId) {
+      return true;
+    }
+    const seen = new Set<string>();
+    const stack = [fromId];
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      if (id === toId) {
+        return true;
+      }
+      if (seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+      stack.push(...(byId.get(id)?.dependencies ?? []));
+    }
+    return false;
+  };
+
+  tasks.forEach((task) => {
+    (task.dependencies ?? []).forEach((depId) => {
+      // Edge depId → task.id closes a cycle when depId already depends on task.id.
+      if (!byId.has(depId) || dependsOn(depId, task.id)) {
+        return;
+      }
+      successors.set(depId, [...(successors.get(depId) ?? []), task.id]);
+    });
+  });
+  return successors;
+}
+
+/**
+ * Auto-scheduling cascade: after `movedTaskId` moved/resized, push every transitive
+ * finish-to-start successor so it never starts before its predecessors end. Only leaves
+ * are cascaded — summary parents derive their schedule from children. Returns the input
+ * array unchanged when nothing needs to move. Assumes an acyclic dependency graph
+ * (guaranteed upstream by wouldCreateCycle); tolerates cyclic input without hanging by
+ * cascading only the DAG-reachable, topologically ordered part.
+ */
+export function applyAutoSchedule(tasks: GanttTask[], movedTaskId: string): GanttTask[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const successors = buildSuccessorMap(tasks);
+  const next = new Map(byId);
+
+  // Topological order over the successor DAG (Kahn). Nodes left with a positive
+  // indegree belong to a cyclic input and are left untouched.
+  const indegree = new Map<string, number>();
+  successors.forEach((succs) => succs.forEach((s) => indegree.set(s, (indegree.get(s) ?? 0) + 1)));
+  const queue = tasks.filter((t) => !indegree.has(t.id)).map((t) => t.id);
+  const order: string[] = [];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    order.push(id);
+    for (const succ of successors.get(id) ?? []) {
+      const d = (indegree.get(succ) ?? 0) - 1;
+      indegree.set(succ, d);
+      if (d === 0) {
+        queue.push(succ);
+      }
+    }
+  }
+
+  let changed = false;
+  for (const id of order) {
+    const task = next.get(id);
+    if (!task) {
+      continue;
+    }
+    // Earliest allowed start: the day after the latest predecessor's end.
+    let earliestStart: Dayjs | null = null;
+    for (const depId of task.dependencies ?? []) {
+      const dep = next.get(depId);
+      if (!dep) {
+        continue;
+      }
+      const depEnd = getTaskEndDate(dep.startDate, dep.duration).add(1, 'day');
+      if (!earliestStart || depEnd.isAfter(earliestStart)) {
+        earliestStart = depEnd;
+      }
+    }
+    if (!earliestStart) {
+      continue;
+    }
+    if (dayjs(task.startDate).isBefore(earliestStart)) {
+      next.set(id, { ...task, startDate: earliestStart.format('YYYY-MM-DD') });
+      changed = true;
+    }
+  }
+
+  // movedTaskId is not needed for the pure cascade (every task is checked against its
+  // predecessors), but keeping it in the signature documents intent and leaves room for
+  // a scoped optimization.
+  void movedTaskId;
+  return changed ? tasks.map((t) => next.get(t.id) ?? t) : tasks;
 }
 
 /**

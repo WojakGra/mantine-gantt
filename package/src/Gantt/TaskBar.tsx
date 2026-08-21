@@ -1,8 +1,8 @@
 import type { Dayjs } from 'dayjs';
 import React from 'react';
-import { getThemeColor, useMantineTheme, type GetStylesApi } from '@mantine/core';
+import { getThemeColor, Tooltip, useMantineTheme, type GetStylesApi } from '@mantine/core';
 import type { GanttDragType, GanttFactory, GanttTask } from './types';
-import { dateToPixel, durationToPixels } from './utils';
+import { dateToPixel, durationToPixels, formatTaskDate, getTaskEndDate } from './utils';
 
 interface TaskBarProps {
   task: GanttTask;
@@ -16,6 +16,8 @@ interface TaskBarProps {
   isCritical?: boolean;
   /** True when this task has children and renders as a non-interactive summary bar. */
   isSummary?: boolean;
+  /** Show a Mantine Tooltip with the task's schedule on hover. */
+  showTooltip?: boolean;
   /** Active drag type when THIS bar is the one being dragged, else null. */
   dragType?: GanttDragType | null;
   /** Continuous, scroll-adjusted px delta for the active drag of THIS bar. */
@@ -35,6 +37,7 @@ function TaskBarComponent({
   isLinkTarget,
   isCritical,
   isSummary,
+  showTooltip,
   dragType,
   dragDeltaX = 0,
   startDrag,
@@ -44,9 +47,10 @@ function TaskBarComponent({
 }: TaskBarProps) {
   const theme = useMantineTheme();
 
-  // Base position/width from task data.
+  const isMilestone = task.type === 'milestone';
+  // Milestones are zero-length markers rendered as a fixed-size diamond.
   const baseLeft = dateToPixel(task.startDate, startDate, columnWidth);
-  const baseWidth = durationToPixels(task.duration, columnWidth);
+  const baseWidth = isMilestone ? columnWidth : durationToPixels(task.duration, columnWidth);
 
   const barColor = task.color
     ? getThemeColor(task.color, theme)
@@ -54,20 +58,26 @@ function TaskBarComponent({
 
   // Live drag geometry. Delta is continuous px (snapped to whole days only on release), so
   // the bar tracks the pointer smoothly. move → slide; resize-end → widen; resize-start →
-  // pin the right edge and follow the left (min one column).
+  // pin the right edge and follow the left (min one column). Milestones only ever move.
   let visualLeft = baseLeft;
   let visualWidth = baseWidth;
   if (dragType === 'move') {
     visualLeft = baseLeft + dragDeltaX;
-  } else if (dragType === 'resize-end') {
+  } else if (dragType === 'resize-end' && !isMilestone) {
     visualWidth = Math.max(columnWidth, baseWidth + dragDeltaX);
-  } else if (dragType === 'resize-start') {
+  } else if (dragType === 'resize-start' && !isMilestone) {
     const delta = Math.min(dragDeltaX, baseWidth - columnWidth);
     visualLeft = baseLeft + delta;
     visualWidth = baseWidth - delta;
   }
 
-  return (
+  const tooltipLabel = isMilestone
+    ? `${task.label} — ${formatTaskDate(task.startDate)}`
+    : `${task.label} — ${formatTaskDate(task.startDate)} → ${formatTaskDate(
+        getTaskEndDate(task.startDate, task.duration)
+      )}${task.progress > 0 ? ` (${task.progress}%)` : ''}`;
+
+  const bar = (
     <div
       {...getStyles('taskBar')}
       role="button"
@@ -77,10 +87,13 @@ function TaskBarComponent({
       data-link-target={isLinkTarget || undefined}
       data-critical={isCritical || undefined}
       data-summary={isSummary || undefined}
+      data-milestone={isMilestone || undefined}
       aria-label={
         isSummary
           ? `${task.label}, summary, starts ${task.startDate}, ${task.duration} day duration.`
-          : `${task.label}, starts ${task.startDate}, ${task.duration} day duration. Arrow keys move, Shift+Arrow resize.`
+          : isMilestone
+            ? `${task.label}, milestone, ${task.startDate}. Arrow keys move.`
+            : `${task.label}, starts ${task.startDate}, ${task.duration} day duration. Arrow keys move, Shift+Arrow resize.`
       }
       style={{
         left: visualLeft,
@@ -100,10 +113,10 @@ function TaskBarComponent({
           onTaskClick?.(task);
         } else if (e.key === 'ArrowLeft' && !isSummary) {
           e.preventDefault();
-          nudge(task.id, e.shiftKey ? 'resize' : 'move', -1);
+          nudge(task.id, e.shiftKey && !isMilestone ? 'resize' : 'move', -1);
         } else if (e.key === 'ArrowRight' && !isSummary) {
           e.preventDefault();
-          nudge(task.id, e.shiftKey ? 'resize' : 'move', 1);
+          nudge(task.id, e.shiftKey && !isMilestone ? 'resize' : 'move', 1);
         }
       }}
     >
@@ -115,8 +128,11 @@ function TaskBarComponent({
         </>
       )}
 
+      {/* Milestone diamond */}
+      {isMilestone && <div {...getStyles('milestone')} aria-hidden="true" />}
+
       {/* Left resize handle */}
-      {!isSummary && (
+      {!isSummary && !isMilestone && (
         <div
           {...getStyles('resizeHandleLeft')}
           aria-hidden="true"
@@ -125,13 +141,15 @@ function TaskBarComponent({
       )}
 
       {/* Progress indicator */}
-      <div {...getStyles('taskBarProgress')} style={{ width: `${task.progress}%` }} />
+      {!isMilestone && (
+        <div {...getStyles('taskBarProgress')} style={{ width: `${task.progress}%` }} />
+      )}
 
       {/* Label */}
-      <span {...getStyles('taskBarLabel')}>{task.label}</span>
+      {!isMilestone && <span {...getStyles('taskBarLabel')}>{task.label}</span>}
 
       {/* Right resize handle */}
-      {!isSummary && (
+      {!isSummary && !isMilestone && (
         <div
           {...getStyles('resizeHandle')}
           aria-hidden="true"
@@ -149,6 +167,16 @@ function TaskBarComponent({
       )}
     </div>
   );
+
+  if (!showTooltip || isSummary) {
+    return bar;
+  }
+
+  return (
+    <Tooltip label={tooltipLabel} withinPortal disabled={isDragging}>
+      {bar}
+    </Tooltip>
+  );
 }
 
 // Custom comparison to prevent re-renders when task data hasn't changed. Every callback is
@@ -162,11 +190,13 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.task.progress === nextProps.task.progress &&
     prevProps.task.label === nextProps.task.label &&
     prevProps.task.color === nextProps.task.color &&
+    prevProps.task.type === nextProps.task.type &&
     prevProps.columnWidth === nextProps.columnWidth &&
     prevProps.isDragging === nextProps.isDragging &&
     prevProps.isLinkTarget === nextProps.isLinkTarget &&
     prevProps.isCritical === nextProps.isCritical &&
     prevProps.isSummary === nextProps.isSummary &&
+    prevProps.showTooltip === nextProps.showTooltip &&
     prevProps.dragType === nextProps.dragType &&
     prevProps.dragDeltaX === nextProps.dragDeltaX &&
     prevProps.startDrag === nextProps.startDrag &&

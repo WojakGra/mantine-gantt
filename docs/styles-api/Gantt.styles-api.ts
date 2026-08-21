@@ -29,6 +29,7 @@ export const GanttStylesApi: StylesApiData<GanttFactory> = {
     taskBar: 'Task bar',
     taskBarLabel: 'Task bar label',
     taskBarProgress: 'Task bar progress',
+    milestone: 'Milestone diamond marker',
     baselineBar: 'Baseline bar',
     summaryBar: 'Summary bar end cap',
     resizeHandle: 'Resize handle',

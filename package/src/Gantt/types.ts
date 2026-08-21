@@ -23,6 +23,12 @@ export interface GanttTask {
   duration: number;
   /** Progress percentage (0-100) */
   progress: number;
+  /**
+   * Kind of row: a regular schedulable `'task'` (default) or a `'milestone'` — a
+   * zero-length marker rendered as a diamond. Milestones cannot be resized (their
+   * duration is ignored for rendering) but can be moved and linked like tasks.
+   */
+  type?: 'task' | 'milestone';
   /** IDs of tasks this task depends on */
   dependencies?: string[];
   /** Custom color for the task bar */
@@ -79,6 +85,7 @@ export type GanttStylesNames =
   | 'taskBar'
   | 'taskBarLabel'
   | 'taskBarProgress'
+  | 'milestone'
   | 'baselineBar'
   | 'summaryBar'
   | 'resizeHandle'
@@ -122,6 +129,16 @@ export interface GanttBaseProps {
 
   /** Callback when a dependency link is created (fromTaskId, toTaskId) */
   onLinkCreate?: (fromTaskId: string, toTaskId: string) => void;
+
+  /** Callback when a dependency link is deleted by clicking it (fromTaskId, toTaskId) */
+  onLinkDelete?: (fromTaskId: string, toTaskId: string) => void;
+
+  /**
+   * Automatically shift dependent tasks (finish-to-start, zero lag) when a task is
+   * moved or resized, so successors never start before their predecessors finish.
+   * Default false.
+   */
+  autoSchedule?: boolean;
 
   /** Width of each day column in pixels, default 40 */
   columnWidth?: number;

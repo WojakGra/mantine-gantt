@@ -19,4 +19,6 @@ export {
   getTaskEndDate,
   calculateTimelineBounds,
   wouldCreateCycle,
+  buildSuccessorMap,
+  applyAutoSchedule,
 } from './Gantt';

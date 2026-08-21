@@ -26,6 +26,8 @@ interface DependencyLinksProps {
   /** Virtualized row range `[firstRow, lastRow)`; links entirely above or below it are skipped. */
   firstRow?: number;
   lastRow?: number;
+  /** Called with (fromTaskId, toTaskId) when a rendered dependency line is clicked. */
+  onLinkClick?: (fromTaskId: string, toTaskId: string) => void;
 }
 
 export function DependencyLinks({
@@ -41,6 +43,7 @@ export function DependencyLinks({
   criticalIds,
   firstRow = 0,
   lastRow = Infinity,
+  onLinkClick,
 }: DependencyLinksProps) {
   // Marker id must be unique per instance: two charts on one page would otherwise share
   // `url(#...)` references and resolve them to the first SVG in the document.
@@ -122,7 +125,7 @@ export function DependencyLinks({
         );
 
         result.push({
-          id: `${fromId}-${toTask.id}`,
+          id: `${fromId}~${toTask.id}`,
           // Path data ("M ... Q ..."), rendered into a <path d>.
           points,
           critical: (criticalIds?.has(fromId) && criticalIds?.has(toTask.id)) || false,
@@ -169,15 +172,30 @@ export function DependencyLinks({
         </marker>
       </defs>
 
-      {links.map((link) => (
-        <path
-          key={link.id}
-          {...getStyles('dependencyLine')}
-          data-critical={link.critical || undefined}
-          d={link.points}
-          markerEnd={`url(#${arrowMarkerId})`}
-        />
-      ))}
+      {links.map((link) => {
+        // `~` separator: task ids may themselves contain `-`, so split on the first `~`.
+        const sep = link.id.indexOf('~');
+        const fromId = link.id.slice(0, sep);
+        const toId = link.id.slice(sep + 1);
+        return (
+          <g key={link.id}>
+            {/* Invisible fat stroke: the visible line is 1.5–2.5px, far too thin to click
+                reliably. This overlay widens the hit area without changing the look. */}
+            <path
+              {...getStyles('dependencyLine')}
+              data-hit
+              d={link.points}
+              onClick={onLinkClick ? () => onLinkClick(fromId, toId) : undefined}
+            />
+            <path
+              {...getStyles('dependencyLine')}
+              data-critical={link.critical || undefined}
+              d={link.points}
+              markerEnd={`url(#${arrowMarkerId})`}
+            />
+          </g>
+        );
+      })}
 
       {linkPreview && (
         <line

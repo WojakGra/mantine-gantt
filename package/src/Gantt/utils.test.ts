@@ -1,6 +1,8 @@
 import dayjs from 'dayjs';
 import type { GanttTask } from './types';
 import {
+  applyAutoSchedule,
+  buildSuccessorMap,
   buildTaskTree,
   calculateTimelineBounds,
   dateToPixel,
@@ -537,5 +539,135 @@ describe('visibleRowRange', () => {
   it('never returns an inverted range when scrolled past the end', () => {
     const [first, last] = visibleRowRange(100000, 440, 44, 500);
     expect(last).toBeGreaterThanOrEqual(first);
+  });
+});
+
+describe('getTaskEndDate with milestones', () => {
+  it('treats duration 0 as a same-day start and end', () => {
+    expect(getTaskEndDate('2026-02-10', 0).isSame('2026-02-10', 'day')).toBe(true);
+  });
+
+  it('clamps negative durations to a same-day range', () => {
+    expect(getTaskEndDate('2026-02-10', -3).isSame('2026-02-10', 'day')).toBe(true);
+  });
+
+  it('keeps inclusive semantics for positive durations', () => {
+    expect(getTaskEndDate('2026-02-10', 1).isSame('2026-02-10', 'day')).toBe(true);
+    expect(getTaskEndDate('2026-02-10', 3).isSame('2026-02-12', 'day')).toBe(true);
+  });
+});
+
+describe('calculateTimelineBounds with milestones', () => {
+  it('does not let a milestone shrink the bounds backwards', () => {
+    const tasks: GanttTask[] = [
+      { id: 'a', label: 'A', startDate: '2026-03-01', duration: 5, progress: 0 },
+      { id: 'm', label: 'M', startDate: '2026-03-20', duration: 0, progress: 0 },
+    ];
+    const { start, end } = calculateTimelineBounds(tasks);
+    expect(start.isSame('2026-02-22', 'day')).toBe(true); // earliest − 7
+    expect(end.isSame('2026-03-27', 'day')).toBe(true); // milestone start + 7
+  });
+});
+
+describe('buildSuccessorMap', () => {
+  const t = (id: string, over: Partial<GanttTask> = {}): GanttTask => ({
+    id,
+    label: id,
+    startDate: '2026-03-02',
+    duration: 2,
+    progress: 0,
+    ...over,
+  });
+
+  it('maps predecessors to their dependents', () => {
+    const tasks = [t('a'), t('b', { dependencies: ['a'] }), t('c', { dependencies: ['a'] })];
+    expect(buildSuccessorMap(tasks)).toEqual(new Map([['a', ['b', 'c']]]));
+  });
+
+  it('ignores unknown dependency ids', () => {
+    const tasks = [t('a', { dependencies: ['ghost'] })];
+    expect(buildSuccessorMap(tasks)).toEqual(new Map());
+  });
+
+  it('drops edges that would close a cycle, keeping the rest as a DAG', () => {
+    // b depends on a; the back-edge a → b would close a loop and is skipped.
+    const tasks = [t('a'), t('b', { dependencies: ['a'] }), t('a2', { dependencies: ['b'] })];
+    tasks[0].dependencies = ['b'];
+    const map = buildSuccessorMap(tasks);
+    expect(map.get('b')).toEqual(['a2']);
+    expect(map.get('a')).toBeUndefined();
+  });
+
+  it('returns an empty map for tasks without dependencies', () => {
+    expect(buildSuccessorMap([t('a'), t('b')])).toEqual(new Map());
+  });
+});
+
+describe('applyAutoSchedule', () => {
+  const t = (id: string, over: Partial<GanttTask> = {}): GanttTask => ({
+    id,
+    label: id,
+    startDate: '2026-03-02',
+    duration: 2,
+    progress: 0,
+    ...over,
+  });
+
+  it('pushes a successor that starts before its predecessor ends', () => {
+    // a: Mar 2–3; b starts Mar 2 → cascaded to Mar 4 (day after a's end).
+    const tasks = [t('a'), t('b', { dependencies: ['a'], startDate: '2026-03-02' })];
+    const result = applyAutoSchedule(tasks, 'a');
+    expect(result.find((x) => x.id === 'b')!.startDate).toBe('2026-03-04');
+    // Predecessor untouched.
+    expect(result.find((x) => x.id === 'a')!.startDate).toBe('2026-03-02');
+  });
+
+  it('leaves an already-compliant successor in place (and returns the same array)', () => {
+    const tasks = [t('a'), t('b', { dependencies: ['a'], startDate: '2026-03-04' })];
+    expect(applyAutoSchedule(tasks, 'a')).toBe(tasks);
+  });
+
+  it('cascades transitively through a chain', () => {
+    const tasks = [
+      t('a'),
+      t('b', { dependencies: ['a'], startDate: '2026-03-02' }),
+      t('c', { dependencies: ['b'], startDate: '2026-03-02' }),
+    ];
+    const result = applyAutoSchedule(tasks, 'a');
+    expect(result.find((x) => x.id === 'b')!.startDate).toBe('2026-03-04');
+    expect(result.find((x) => x.id === 'c')!.startDate).toBe('2026-03-06');
+  });
+
+  it('uses the latest predecessor when a task has several dependencies', () => {
+    const tasks = [
+      t('a'), // Mar 2–3
+      t('long', { startDate: '2026-03-05', duration: 5 }), // Mar 5–9
+      t('b', { dependencies: ['a', 'long'], startDate: '2026-03-02' }),
+    ];
+    const result = applyAutoSchedule(tasks, 'long');
+    expect(result.find((x) => x.id === 'b')!.startDate).toBe('2026-03-10');
+  });
+
+  it('respects milestones as zero-length predecessors', () => {
+    const tasks = [
+      t('m', { type: 'milestone', duration: 0 }),
+      t('b', { dependencies: ['m'], startDate: '2026-03-02' }),
+    ];
+    const result = applyAutoSchedule(tasks, 'm');
+    // Milestone occupies only its start day; successor may start the next day.
+    expect(result.find((x) => x.id === 'b')!.startDate).toBe('2026-03-03');
+  });
+
+  it('tolerates cyclic input without hanging', () => {
+    const tasks = [
+      t('a', { dependencies: ['b'] }),
+      t('b', { dependencies: ['a'], startDate: '2026-03-01' }),
+    ];
+    expect(() => applyAutoSchedule(tasks, 'a')).not.toThrow();
+  });
+
+  it('ignores unknown dependency ids', () => {
+    const tasks = [t('b', { dependencies: ['ghost'] })];
+    expect(applyAutoSchedule(tasks, 'b')).toBe(tasks);
   });
 });
