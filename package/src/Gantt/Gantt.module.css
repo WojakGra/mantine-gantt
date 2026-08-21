@@ -542,13 +542,18 @@
 
 .dependencyLine {
   fill: none;
-  stroke: light-dark(var(--mantine-color-gray-6), var(--mantine-color-gray-5));
+  stroke: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
   stroke-width: 1.5;
+  stroke-linecap: round;
   pointer-events: stroke;
+  transition:
+    stroke 150ms ease,
+    stroke-width 150ms ease;
 }
 
 .dependencyLine:hover {
-  stroke: light-dark(var(--mantine-color-gray-8), var(--mantine-color-gray-3));
+  stroke: light-dark(var(--mantine-color-gray-8), var(--mantine-color-gray-4));
+  stroke-width: 2.5;
 }
 
 .dependencyLine[data-critical] {
@@ -556,10 +561,24 @@
   stroke-width: 2.5;
 }
 
-.linkArrow {
-  fill: light-dark(var(--mantine-color-gray-6), var(--mantine-color-gray-5));
+.dependencyLine[data-preview] {
+  stroke: var(--mantine-primary-color-filled);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  animation: gantt-link-dash 500ms linear infinite;
 }
 
-.linkArrow[data-critical] {
-  fill: var(--gantt-critical-color);
+@keyframes gantt-link-dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+.linkArrow {
+  /* context-stroke makes the arrowhead inherit the stroke color of the line that
+     references the marker — including :hover and [data-critical] states, which plain
+     CSS can't reach (marker content lives in <defs> and doesn't match selectors on
+     the referencing element). Fallback for older browsers is a neutral gray. */
+  fill: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
+  fill: context-stroke;
 }

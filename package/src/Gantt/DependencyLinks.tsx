@@ -4,6 +4,10 @@ import type { GetStylesApi } from '@mantine/core';
 import type { GanttDragType, GanttFactory, GanttTask, GanttTreeRow } from './types';
 import { dateToPixel, durationToPixels, getEffectiveTask } from './utils';
 
+// Horizontal stub before/after an elbow, and the default elbow rounding radius.
+const CORNER_OFFSET = 10;
+const ELBOW_RADIUS = 6;
+
 interface DependencyLinksProps {
   /** Visible rows in render order — hidden tasks get no arrows. */
   rows: GanttTreeRow[];
@@ -38,11 +42,10 @@ export function DependencyLinks({
   firstRow = 0,
   lastRow = Infinity,
 }: DependencyLinksProps) {
-  // Marker ids must be unique per instance: two charts on one page would otherwise share
+  // Marker id must be unique per instance: two charts on one page would otherwise share
   // `url(#...)` references and resolve them to the first SVG in the document.
   const uid = useId();
   const arrowMarkerId = `${uid}-dep-arrow`;
-  const criticalMarkerId = `${uid}-dep-arrow-critical`;
 
   const taskMap = useMemo(() => {
     const map = new Map<string, { task: GanttTask; index: number }>();
@@ -108,7 +111,7 @@ export function DependencyLinks({
         }
 
         // Generate polyline points
-        const points = generateSvarStylePoints(
+        const points = generateLinkPoints(
           fromBarRight,
           fromBarMidY,
           toBarLeft,
@@ -120,6 +123,7 @@ export function DependencyLinks({
 
         result.push({
           id: `${fromId}-${toTask.id}`,
+          // Path data ("M ... Q ..."), rendered into a <path d>.
           points,
           critical: (criticalIds?.has(fromId) && criticalIds?.has(toTask.id)) || false,
         });
@@ -145,41 +149,40 @@ export function DependencyLinks({
     return null;
   }
 
-  const hasCriticalLink = links.some((link) => link.critical);
-
   return (
     <svg {...getStyles('dependencyLinks')}>
       <defs>
-        <marker id={arrowMarkerId} markerWidth="5" markerHeight="4" refX="4" refY="2" orient="auto">
-          <path d="M0,0 L5,2 L0,4 z" {...getStyles('linkArrow')} />
+        {/* A single marker: the arrowhead paints itself with `context-stroke` (see CSS),
+            so it always matches the referencing line — base color, :hover and critical
+            alike. markerUnits=userSpaceOnUse keeps the head the same size regardless of
+            stroke-width, so thicker critical lines don't get oversized heads. */}
+        <marker
+          id={arrowMarkerId}
+          markerWidth="8"
+          markerHeight="8"
+          refX="7"
+          refY="4"
+          orient="auto"
+          markerUnits="userSpaceOnUse"
+        >
+          <path d="M0,0.5 L7,4 L0,7.5 Z" {...getStyles('linkArrow')} />
         </marker>
-        {hasCriticalLink && (
-          <marker
-            id={criticalMarkerId}
-            markerWidth="5"
-            markerHeight="4"
-            refX="4"
-            refY="2"
-            orient="auto"
-          >
-            <path d="M0,0 L5,2 L0,4 z" data-critical {...getStyles('linkArrow')} />
-          </marker>
-        )}
       </defs>
 
       {links.map((link) => (
-        <polyline
+        <path
           key={link.id}
           {...getStyles('dependencyLine')}
           data-critical={link.critical || undefined}
-          points={link.points}
-          markerEnd={`url(#${link.critical ? criticalMarkerId : arrowMarkerId})`}
+          d={link.points}
+          markerEnd={`url(#${arrowMarkerId})`}
         />
       ))}
 
       {linkPreview && (
         <line
           {...getStyles('dependencyLine')}
+          data-preview
           x1={linkPreview.x1}
           y1={linkPreview.y1}
           x2={linkPreview.x2}
@@ -192,13 +195,18 @@ export function DependencyLinks({
 }
 
 /**
- * Generate points like svar-gantt style:
- * - Exit from right edge of source, middle height
- * - Go right a bit, then down to gap between rows
- * - Go horizontal to align with target
- * - Go down to target, enter from left at middle height
+ * Orthogonal routing between the source bar's right edge and the target bar's left edge.
+ *
+ * - Forward links (target starts after source ends): exit right, route through the gap
+ *   between the two rows, enter left. Classic finish-to-start shape.
+ * - Backward links (target begins before source ends): exiting right would draw a long
+ *   line straight across the target bar. Instead the path leaves from the SOURCE's left
+ *   edge, loops around through the row gap on that side, and still enters the target's
+ *   left edge — visually unambiguous "goes back to" arrow.
+ *
+ * Corners are emitted as separate points; rounding is applied by `roundCorners`.
  */
-function generateSvarStylePoints(
+function generateLinkPoints(
   fromX: number,
   fromMidY: number,
   toX: number,
@@ -208,34 +216,68 @@ function generateSvarStylePoints(
   rowHeight: number
 ): string {
   const points: Array<[number, number]> = [];
-  const cornerOffset = 10;
+  // Route through the gap between rows (the row boundary), never across a bar.
+  const routeY = Math.max(fromIndex, toIndex) * rowHeight;
+  const backward = toX < fromX;
 
-  // Start: right edge of source bar, middle height
+  if (backward) {
+    // Exit LEFT of source → down to row gap → horizontal under/over both bars → up/down
+    // to target mid → enter LEFT of target.
+    const exitX = fromX - CORNER_OFFSET;
+    points.push([fromX, fromMidY]);
+    points.push([exitX, fromMidY]);
+    points.push([exitX, routeY]);
+    const entryX = toX - CORNER_OFFSET;
+    points.push([entryX, routeY]);
+    points.push([entryX, toMidY]);
+    points.push([toX, toMidY]);
+    return roundCorners(points);
+  }
+
+  // Forward: exit RIGHT of source → row gap → enter LEFT of target.
+  const exitX = fromX + CORNER_OFFSET;
   points.push([fromX, fromMidY]);
-
-  // Go right a small amount
-  const exitX = fromX + cornerOffset;
   points.push([exitX, fromMidY]);
-
-  // Calculate the Y for the horizontal routing lane
-  // Route through the gap between rows (use the row boundary)
-  const routeRowIndex = Math.max(fromIndex, toIndex);
-  const routeY = routeRowIndex * rowHeight;
-
-  // Go down to the routing lane
   points.push([exitX, routeY]);
-
-  // Go horizontal to align with target entry point
-  const entryX = toX - cornerOffset;
+  const entryX = toX - CORNER_OFFSET;
   points.push([entryX, routeY]);
-
-  // Go down/up to target Y
   points.push([entryX, toMidY]);
-
-  // Enter target (left edge)
   points.push([toX, toMidY]);
+  return roundCorners(points, ELBOW_RADIUS);
+}
 
-  return points.map((p) => `${p[0]},${p[1]}`).join(' ');
+/**
+ * Replace each interior corner of an orthogonal polyline with a quadratic curve, giving
+ * dependency lines smooth elbows instead of sharp right angles. Returns SVG path data
+ * ("M x,y L x,y Q x,y x,y ...") for a `<path d>` attribute. The first/last points are
+ * kept exactly (they anchor to the bars); corner radius shrinks to fit short segments.
+ */
+function roundCorners(points: Array<[number, number]>, radius = 6): string {
+  if (points.length < 3) {
+    return `M ${points.map((p) => p.join(',')).join(' L ')}`;
+  }
+  const parts: string[] = [`M ${points[0][0]},${points[0][1]}`];
+  for (let i = 1; i < points.length - 1; i++) {
+    const [prevX, prevY] = points[i - 1];
+    const [x, y] = points[i];
+    const [nextX, nextY] = points[i + 1];
+
+    // Distance available on each side of the corner — clamp so a curve never eats a
+    // whole short segment (e.g. the little stub before the arrowhead).
+    const inLen = Math.hypot(x - prevX, y - prevY);
+    const outLen = Math.hypot(nextX - x, nextY - y);
+    const r = Math.min(radius, inLen / 2, outLen / 2);
+
+    const inX = x - ((x - prevX) / inLen) * r;
+    const inY = y - ((y - prevY) / inLen) * r;
+    const outX = x + ((nextX - x) / outLen) * r;
+    const outY = y + ((nextY - y) / outLen) * r;
+
+    parts.push(`L ${inX},${inY}`, `Q ${x},${y} ${outX},${outY}`);
+  }
+  const last = points[points.length - 1];
+  parts.push(`L ${last[0]},${last[1]}`);
+  return parts.join(' ');
 }
 
 DependencyLinks.displayName = 'DependencyLinks';

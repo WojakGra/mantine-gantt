@@ -213,8 +213,8 @@ describe('critical path', () => {
     const { container } = render(<Gantt tasks={mockTasks} highlightCriticalPath />);
     // mockTasks is a simple chain 1 -> 2 -> 3: all critical
     expect(container.querySelectorAll('[class*="taskBar"][data-critical]').length).toBe(3);
-    // both dependency lines connect critical tasks
-    expect(container.querySelectorAll('polyline[data-critical]').length).toBe(2);
+    // both dependency lines connect critical tasks (paths with `d`, not the marker def)
+    expect(container.querySelectorAll('path[data-critical][d]').length).toBe(2);
   });
 
   it('does not mark anything without the prop', () => {
@@ -304,13 +304,13 @@ describe('hierarchy', () => {
     const { container } = render(<Gantt tasks={treeTasks} onToggleExpand={onToggleExpand} />);
 
     expect(container.querySelectorAll('[class*="mantine-Gantt-timelineRow"]').length).toBe(4);
-    expect(container.querySelectorAll('polyline[class*="dependencyLine"]').length).toBe(1);
+    expect(container.querySelectorAll('path[class*="dependencyLine"]').length).toBe(1);
 
     fireEvent.click(container.querySelector('[class*="expandChevron"]')!);
     expect(onToggleExpand).toHaveBeenCalledWith('p', false);
     expect(container.querySelectorAll('[class*="mantine-Gantt-timelineRow"]').length).toBe(2);
     expect(container.querySelectorAll('[class*="mantine-Gantt-taskListRow"]').length).toBe(2);
-    expect(container.querySelectorAll('polyline[class*="dependencyLine"]').length).toBe(0);
+    expect(container.querySelectorAll('path[class*="dependencyLine"]').length).toBe(0);
 
     fireEvent.click(container.querySelector('[class*="expandChevron"]')!);
     expect(onToggleExpand).toHaveBeenLastCalledWith('p', true);
