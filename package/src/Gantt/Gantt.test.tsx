@@ -606,6 +606,19 @@ describe('link deletion', () => {
     expect(container.querySelectorAll('path[class*="dependencyLine"][data-hit]').length).toBe(1);
   });
 
+  it('deletes a link when the click follows a pointerdown on the arrow (pan handler must not eat it)', () => {
+    const onLinkDelete = jest.fn();
+    const { container } = render(<Gantt defaultTasks={mockTasks} onLinkDelete={onLinkDelete} />);
+    const hitLine = container.querySelector('path[class*="dependencyLine"][data-hit]')!;
+
+    // Real browsers fire pointerdown before click; the timeline body's pan handler
+    // reacts to that pointerdown and used to swallow the trailing click.
+    fireEvent.pointerDown(hitLine);
+    fireEvent.click(hitLine);
+
+    expect(onLinkDelete).toHaveBeenCalledTimes(1);
+  });
+
   it('does not fire onLinkDelete when no callback-driven deletion happens without clicks', () => {
     const onLinkDelete = jest.fn();
     const { container } = render(<Gantt defaultTasks={mockTasks} onLinkDelete={onLinkDelete} />);

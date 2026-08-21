@@ -643,3 +643,118 @@ export function GroupingCollapsed() {
     </div>
   );
 }
+
+const milestoneTasks: GanttTask[] = [
+  { id: '1', label: 'Requirements', startDate: '2026-04-01', duration: 5, progress: 100 },
+  {
+    id: '2',
+    label: 'Design review',
+    startDate: '2026-04-06',
+    duration: 3,
+    progress: 60,
+    dependencies: ['1'],
+    color: 'violet',
+  },
+  {
+    id: 'm1',
+    label: 'Design approved',
+    startDate: '2026-04-09',
+    duration: 0,
+    progress: 0,
+    type: 'milestone',
+    dependencies: ['2'],
+    color: 'grape',
+  },
+  {
+    id: '3',
+    label: 'Implementation',
+    startDate: '2026-04-10',
+    duration: 8,
+    progress: 10,
+    dependencies: ['m1'],
+    color: 'teal',
+  },
+  {
+    id: 'm2',
+    label: 'Go live',
+    startDate: '2026-04-18',
+    duration: 0,
+    progress: 0,
+    type: 'milestone',
+    dependencies: ['3'],
+    color: 'red',
+  },
+];
+
+export function Milestones() {
+  return (
+    <div style={{ padding: 20, height: 400 }}>
+      <Gantt defaultTasks={milestoneTasks} showTitle />
+    </div>
+  );
+}
+
+export function AutoSchedule() {
+  const chainTasks: GanttTask[] = [
+    { id: '1', label: 'Foundation', startDate: '2026-05-04', duration: 5, progress: 100 },
+    {
+      id: '2',
+      label: 'Framing',
+      startDate: '2026-05-04',
+      duration: 6,
+      progress: 40,
+      dependencies: ['1'],
+      color: 'teal',
+    },
+    {
+      id: '3',
+      label: 'Roofing',
+      startDate: '2026-05-04',
+      duration: 4,
+      progress: 0,
+      dependencies: ['2'],
+      color: 'orange',
+    },
+    {
+      id: '4',
+      label: 'Interior',
+      startDate: '2026-05-04',
+      duration: 8,
+      progress: 0,
+      dependencies: ['3'],
+      color: 'violet',
+    },
+  ];
+
+  return (
+    <div style={{ padding: 20, height: 400 }}>
+      {/* Drag or resize any task — its successors shift to keep the chain valid. */}
+      <Gantt defaultTasks={chainTasks} autoSchedule showTitle />
+    </div>
+  );
+}
+
+export function LinkDeletion() {
+  return (
+    <div style={{ padding: 20, height: 500 }}>
+      {/* Click a dependency arrow to delete that link. */}
+      <Gantt
+        defaultTasks={mockTasks}
+        showTitle
+        onLinkDelete={(from, to) => {
+          // eslint-disable-next-line no-console
+          console.log('Link deleted:', from, '->', to);
+        }}
+      />
+    </div>
+  );
+}
+
+export function MilestoneCriticalPath() {
+  // A milestone on the critical path is painted with criticalPathColor like any task.
+  return (
+    <div style={{ padding: 20, height: 400 }}>
+      <Gantt defaultTasks={milestoneTasks} highlightCriticalPath criticalPathColor="red" />
+    </div>
+  );
+}

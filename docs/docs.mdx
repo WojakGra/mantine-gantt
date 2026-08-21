@@ -43,6 +43,30 @@ underneath the actual one — turn those off with `showBaselines={false}`.
 
 <Demo data={demos.criticalPath} />
 
+## Milestones
+
+Set `type: 'milestone'` on a task to render it as a diamond instead of a bar. A milestone is a
+zero-length marker pinned to its start day — it can be dragged and linked like any task, but it
+cannot be resized and its `duration` is ignored for rendering. Milestones participate in the
+critical path calculation and in auto-scheduling like regular tasks.
+
+<Demo data={demos.milestones} />
+
+## Auto-scheduling
+
+With `autoSchedule`, moving or resizing a task pushes every finish-to-start successor so it never
+starts before its predecessors end. The cascade is transitive (a whole chain shifts together) and
+picks the latest predecessor when a task has several dependencies. It works with drags, resizes
+and keyboard nudges alike. Turned off by default.
+
+<Demo data={demos.autoSchedule} />
+
+## Deleting dependency links
+
+Click a dependency arrow to delete that link. The component removes the source id from the
+target's `dependencies` and fires `onLinkDelete(fromTaskId, toTaskId)` alongside `onTasksChange`,
+mirroring how link creation works.
+
 ## Controlled and uncontrolled
 
 Pass `defaultTasks` and the component owns the task list (uncontrolled) — this is what the demos
@@ -56,7 +80,7 @@ const [tasks, setTasks] = useState(initialTasks);
 <Gantt tasks={tasks} onTasksChange={setTasks} />;
 ```
 
-`onTaskUpdate` and `onLinkCreate` keep working in both modes — they fire alongside
-`onTasksChange`, not instead of it.
+`onTaskUpdate`, `onLinkCreate` and `onLinkDelete` keep working in both modes — they fire
+alongside `onTasksChange`, not instead of it.
 
 Migrating from 0.2.x: `<Gantt tasks={x} />` becomes `<Gantt defaultTasks={x} />`.
