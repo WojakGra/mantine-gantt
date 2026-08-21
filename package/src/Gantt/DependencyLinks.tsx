@@ -195,14 +195,11 @@ export function DependencyLinks({
 }
 
 /**
- * Orthogonal routing between the source bar's right edge and the target bar's left edge.
- *
- * - Forward links (target starts after source ends): exit right, route through the gap
- *   between the two rows, enter left. Classic finish-to-start shape.
- * - Backward links (target begins before source ends): exiting right would draw a long
- *   line straight across the target bar. Instead the path leaves from the SOURCE's left
- *   edge, loops around through the row gap on that side, and still enters the target's
- *   left edge — visually unambiguous "goes back to" arrow.
+ * Orthogonal routing between the source bar's right edge and the target bar's left edge:
+ * exit right, route through the gap between the two rows, enter left. Used for every
+ * link, including backward ones (target starts before the source ends) — there the
+ * horizontal segment simply runs behind the bars in between, which is fine because the
+ * links SVG renders below the bars (z-index 1 vs 10).
  *
  * Corners are emitted as separate points; rounding is applied by `roundCorners`.
  */
@@ -218,23 +215,8 @@ function generateLinkPoints(
   const points: Array<[number, number]> = [];
   // Route through the gap between rows (the row boundary), never across a bar.
   const routeY = Math.max(fromIndex, toIndex) * rowHeight;
-  const backward = toX < fromX;
 
-  if (backward) {
-    // Exit LEFT of source → down to row gap → horizontal under/over both bars → up/down
-    // to target mid → enter LEFT of target.
-    const exitX = fromX - CORNER_OFFSET;
-    points.push([fromX, fromMidY]);
-    points.push([exitX, fromMidY]);
-    points.push([exitX, routeY]);
-    const entryX = toX - CORNER_OFFSET;
-    points.push([entryX, routeY]);
-    points.push([entryX, toMidY]);
-    points.push([toX, toMidY]);
-    return roundCorners(points);
-  }
-
-  // Forward: exit RIGHT of source → row gap → enter LEFT of target.
+  // Exit RIGHT of source → row gap → enter LEFT of target.
   const exitX = fromX + CORNER_OFFSET;
   points.push([fromX, fromMidY]);
   points.push([exitX, fromMidY]);
