@@ -215,24 +215,25 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
   // Freeze bounds while dragging so the axis doesn't reflow under the cursor. The origin
   // (start) never moves during a drag; only the END grows so dragging into the future has
-  // room to auto-scroll into.
-  const stableBoundsRef = useRef(calculatedBounds);
-  if (!active) {
-    stableBoundsRef.current = calculatedBounds;
-  }
-  let bounds = stableBoundsRef.current;
-  if (active && active.type !== 'link') {
-    const task = tasks.find((t) => t.id === active.taskId);
-    if (task) {
-      const startDay = dayjs(task.startDate).diff(bounds.start, 'day');
-      const barEndDay = startDay + task.duration + Math.round(active.deltaX / effectiveColumnWidth);
-      const needed = bounds.start.add(barEndDay + DRAG_BUFFER_DAYS, 'day');
-      if (needed.isAfter(bounds.end)) {
-        bounds = { start: bounds.start, end: needed };
-        stableBoundsRef.current = bounds;
-      }
+  // room to auto-scroll into. Computed purely in a memo — no ref writes during render.
+  // The 30-day buffer dwarfs typical back-and-forth movement, so letting the end shrink
+  // again when the pointer moves left is invisible in practice.
+  const bounds = useMemo(() => {
+    if (!active || active.type === 'link') {
+      return calculatedBounds;
     }
-  }
+    const task = tasks.find((t) => t.id === active.taskId);
+    if (!task) {
+      return calculatedBounds;
+    }
+    const startDay = dayjs(task.startDate).diff(calculatedBounds.start, 'day');
+    const barEndDay = startDay + task.duration + Math.round(active.deltaX / effectiveColumnWidth);
+    const needed = calculatedBounds.start.add(barEndDay + DRAG_BUFFER_DAYS, 'day');
+    if (!needed.isAfter(calculatedBounds.end)) {
+      return calculatedBounds;
+    }
+    return { start: calculatedBounds.start, end: needed };
+  }, [calculatedBounds, active, tasks, effectiveColumnWidth]);
 
   // Calculate total timeline width, extended to at least fill the visible viewport so
   // there is no empty area to the right of the last column.
@@ -247,18 +248,49 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   const [firstRow, lastRow] = visibleRowRange(scrollTop, viewport.height, rowHeight, rows.length);
   const visibleRows = rows.slice(firstRow, lastRow);
 
-  // Sync scroll between task list and timeline
+  // Sync scroll between task list and timeline. `echoRef` remembers the value we assigned
+  // programmatically, so the scroll event fired by that very assignment can be recognized
+  // and ignored — without it, the two handlers would echo back and forth. Matching on the
+  // value (not a boolean flag) means a swallowed echo can never eat a real user scroll.
+  const echoRef = useRef<{ source: 'timeline' | 'list'; value: number } | null>(null);
+
   const handleTimelineScroll = useCallback(() => {
-    if (timelineBodyRef.current && taskListBodyRef.current) {
-      taskListBodyRef.current.scrollTop = timelineBodyRef.current.scrollTop;
+    const body = timelineBodyRef.current;
+    if (!body) {
+      return;
+    }
+    const echo = echoRef.current;
+    if (echo?.source === 'timeline' && echo.value === body.scrollTop) {
+      echoRef.current = null;
+      return;
+    }
+    if (taskListBodyRef.current) {
+      echoRef.current = { source: 'timeline', value: body.scrollTop };
+      taskListBodyRef.current.scrollTop = body.scrollTop;
     }
     // Sync horizontal scroll with header
-    if (timelineBodyRef.current && timelineHeaderRef.current) {
-      timelineHeaderRef.current.scrollLeft = timelineBodyRef.current.scrollLeft;
+    if (timelineHeaderRef.current) {
+      timelineHeaderRef.current.scrollLeft = body.scrollLeft;
     }
     // Both panes are kept in sync, so the timeline's scrollTop is the single source for
     // the virtualized row range.
-    setScrollTop(timelineBodyRef.current?.scrollTop ?? 0);
+    setScrollTop(body.scrollTop);
+  }, []);
+
+  const handleTaskListScroll = useCallback(() => {
+    const list = taskListBodyRef.current;
+    if (!list) {
+      return;
+    }
+    const echo = echoRef.current;
+    if (echo?.source === 'list' && echo.value === list.scrollTop) {
+      echoRef.current = null;
+      return;
+    }
+    if (timelineBodyRef.current) {
+      echoRef.current = { source: 'list', value: list.scrollTop };
+      timelineBodyRef.current.scrollTop = list.scrollTop;
+    }
   }, []);
 
   // Measure the timeline body so the grid can be widened to fill the viewport.
@@ -279,11 +311,13 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     return () => observer.disconnect();
   }, []);
 
-  const handleTaskListScroll = useCallback(() => {
-    if (timelineBodyRef.current && taskListBodyRef.current) {
-      timelineBodyRef.current.scrollTop = taskListBodyRef.current.scrollTop;
-    }
-  }, []);
+  // Stable so TaskBar's memo comparator can rely on reference equality.
+  const handleTaskClick = useCallback(
+    (task: GanttTask) => {
+      onTaskClick?.(task);
+    },
+    [onTaskClick]
+  );
 
   // Drag-to-pan the timeline with the mouse on empty space (the scrollbar is hidden). Bars and
   // handles stopPropagation on pointerdown, so any pointerdown reaching here is empty canvas.
@@ -444,7 +478,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                     startDrag={drag.startDrag}
                     didDrag={drag.didDrag}
                     nudge={drag.nudge}
-                    onClick={() => onTaskClick?.(task)}
+                    onTaskClick={handleTaskClick}
                     isCritical={criticalIds.has(task.id)}
                   />
 

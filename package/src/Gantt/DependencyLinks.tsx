@@ -1,5 +1,5 @@
 import type { Dayjs } from 'dayjs';
-import React, { useMemo } from 'react';
+import React, { useId, useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
 import type { GanttDragType, GanttFactory, GanttTask, GanttTreeRow } from './types';
 import { dateToPixel, durationToPixels, getEffectiveTask } from './utils';
@@ -38,6 +38,12 @@ export function DependencyLinks({
   firstRow = 0,
   lastRow = Infinity,
 }: DependencyLinksProps) {
+  // Marker ids must be unique per instance: two charts on one page would otherwise share
+  // `url(#...)` references and resolve them to the first SVG in the document.
+  const uid = useId();
+  const arrowMarkerId = `${uid}-dep-arrow`;
+  const criticalMarkerId = `${uid}-dep-arrow-critical`;
+
   const taskMap = useMemo(() => {
     const map = new Map<string, { task: GanttTask; index: number }>();
     rows.forEach((row, index) => {
@@ -144,12 +150,12 @@ export function DependencyLinks({
   return (
     <svg {...getStyles('dependencyLinks')}>
       <defs>
-        <marker id="dep-arrow" markerWidth="5" markerHeight="4" refX="4" refY="2" orient="auto">
+        <marker id={arrowMarkerId} markerWidth="5" markerHeight="4" refX="4" refY="2" orient="auto">
           <path d="M0,0 L5,2 L0,4 z" {...getStyles('linkArrow')} />
         </marker>
         {hasCriticalLink && (
           <marker
-            id="dep-arrow-critical"
+            id={criticalMarkerId}
             markerWidth="5"
             markerHeight="4"
             refX="4"
@@ -167,7 +173,7 @@ export function DependencyLinks({
           {...getStyles('dependencyLine')}
           data-critical={link.critical || undefined}
           points={link.points}
-          markerEnd={link.critical ? 'url(#dep-arrow-critical)' : 'url(#dep-arrow)'}
+          markerEnd={`url(#${link.critical ? criticalMarkerId : arrowMarkerId})`}
         />
       ))}
 
@@ -178,7 +184,7 @@ export function DependencyLinks({
           y1={linkPreview.y1}
           x2={linkPreview.x2}
           y2={linkPreview.y2}
-          markerEnd="url(#dep-arrow)"
+          markerEnd={`url(#${arrowMarkerId})`}
         />
       )}
     </svg>

@@ -23,7 +23,7 @@ interface TaskBarProps {
   startDrag: (type: GanttDragType, taskId: string, event: React.PointerEvent) => void;
   didDrag: () => boolean;
   nudge: (taskId: string, action: 'move' | 'resize', days: number) => void;
-  onClick?: () => void;
+  onTaskClick?: (task: GanttTask) => void;
 }
 
 function TaskBarComponent({
@@ -40,7 +40,7 @@ function TaskBarComponent({
   startDrag,
   didDrag,
   nudge,
-  onClick,
+  onTaskClick,
 }: TaskBarProps) {
   const theme = useMantineTheme();
 
@@ -92,12 +92,12 @@ function TaskBarComponent({
         if (didDrag()) {
           return;
         }
-        onClick?.();
+        onTaskClick?.(task);
       }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onClick?.();
+          onTaskClick?.(task);
         } else if (e.key === 'ArrowLeft' && !isSummary) {
           e.preventDefault();
           nudge(task.id, e.shiftKey ? 'resize' : 'move', -1);
@@ -151,7 +151,9 @@ function TaskBarComponent({
   );
 }
 
-// Custom comparison to prevent re-renders when task data hasn't changed
+// Custom comparison to prevent re-renders when task data hasn't changed. Every callback is
+// compared too — they are part of the props contract, and skipping them would let a bar
+// keep calling a stale closure (e.g. an old onTaskClick) after its parent re-rendered.
 function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolean {
   return (
     prevProps.task.id === nextProps.task.id &&
@@ -167,6 +169,10 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.isSummary === nextProps.isSummary &&
     prevProps.dragType === nextProps.dragType &&
     prevProps.dragDeltaX === nextProps.dragDeltaX &&
+    prevProps.startDrag === nextProps.startDrag &&
+    prevProps.didDrag === nextProps.didDrag &&
+    prevProps.nudge === nextProps.nudge &&
+    prevProps.onTaskClick === nextProps.onTaskClick &&
     prevProps.startDate.isSame(nextProps.startDate)
   );
 }

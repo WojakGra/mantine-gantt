@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GanttDragType, GanttTask } from './types';
 import { snapToGrid, wouldCreateCycle } from './utils';
 
@@ -270,6 +270,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
     const drag = dragRef.current;
     document.removeEventListener('pointermove', handlePointerMove);
     document.removeEventListener('pointerup', handlePointerUp);
+    document.removeEventListener('pointercancel', handlePointerUp);
     stopAutoScroll();
     document.body.style.userSelect = '';
     document.body.style.cursor = '';
@@ -303,11 +304,33 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       };
       document.addEventListener('pointermove', handlePointerMove);
       document.addEventListener('pointerup', handlePointerUp);
+      // pointercancel: the OS/browser can take the gesture over (touch scrolling, alerts) —
+      // treat it like pointerup so cursors/listeners/auto-scroll never stay stuck.
+      document.addEventListener('pointercancel', handlePointerUp);
     },
     [handlePointerMove, handlePointerUp]
   );
 
   const didDrag = useCallback(() => didDragRef.current, []);
+
+  // Unmount mid-drag (view switch etc.): drop document listeners and stop auto-scroll,
+  // otherwise they leak and keep firing setState on a dead component.
+  useEffect(
+    () => () => {
+      const drag = dragRef.current;
+      if (!drag) {
+        return;
+      }
+      dragRef.current = null;
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+      document.removeEventListener('pointercancel', handlePointerUp);
+      stopAutoScroll();
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    },
+    [handlePointerMove, handlePointerUp, stopAutoScroll]
+  );
 
   const nudge = useCallback((taskId: string, action: 'move' | 'resize', days: number) => {
     const { tasks, commitTasks, onTaskUpdate, announce } = optsRef.current;
