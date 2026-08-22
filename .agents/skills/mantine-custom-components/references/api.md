@@ -132,7 +132,7 @@ Factory<{
     Label: typeof MyLabel;
   };
 
-  // Set to true for sub-components — disables theme classNames/styles/vars for this component
+  // Set to true for sub-components - disables theme classNames/styles/vars for this component
   compound: true;
 
   // Context type passed as 3rd argument to styles/vars resolvers
@@ -254,7 +254,7 @@ MyComponent.varsResolver = varsResolver;
 
 ## StylesApiProps and CompoundStylesApiProps
 
-**`StylesApiProps`** — extend on the root/main component's props interface:
+**`StylesApiProps`** - extend on the root/main component's props interface:
 
 ```ts
 interface StylesApiProps<Payload extends FactoryPayload> {
@@ -267,7 +267,7 @@ interface StylesApiProps<Payload extends FactoryPayload> {
 }
 ```
 
-**`CompoundStylesApiProps`** — extend on sub-component (compound) props instead. Subset of `StylesApiProps` — no `unstyled` or `attributes`.
+**`CompoundStylesApiProps`** - extend on sub-component (compound) props instead. Subset of `StylesApiProps` - no `unstyled` or `attributes`.
 
 ```ts
 interface CompoundStylesApiProps<Payload extends FactoryPayload>
@@ -280,7 +280,7 @@ Compound sub-components also use `Factory<{ ..., compound: true }>` and access s
 
 ## BoxProps and ElementProps
 
-**`BoxProps`** — extends `MantineStyleProps`, adds:
+**`BoxProps`** - extends `MantineStyleProps`, adds:
 
 ```ts
 interface BoxProps extends MantineStyleProps {
@@ -294,7 +294,7 @@ interface BoxProps extends MantineStyleProps {
 }
 ```
 
-**`MantineStyleProps`** — shorthand style props (all accept responsive `{ base, sm, md, lg, xl }` objects):
+**`MantineStyleProps`** - shorthand style props (all accept responsive `{ base, sm, md, lg, xl }` objects):
 
 | Prop                                        | CSS property    | Prop                                        | CSS property     |
 | ------------------------------------------- | --------------- | ------------------------------------------- | ---------------- |
@@ -310,7 +310,7 @@ interface BoxProps extends MantineStyleProps {
 | `pos`                                       | position        | `top` `left` `bottom` `right` `inset`       | positioning      |
 | `display`                                   | display         | `flex`                                      | flex             |
 
-**`ElementProps`** — gets HTML element props, remapping `style` to Mantine's type:
+**`ElementProps`** - gets HTML element props, remapping `style` to Mantine's type:
 
 ```ts
 // Include all div props except style (remapped) and any conflicting props

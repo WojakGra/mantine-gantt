@@ -4,7 +4,7 @@ import { render, screen } from '@mantine-tests/core';
 import { Gantt, GanttTask } from './index';
 
 // jsdom has no PointerEvent, so fireEvent.pointer* drops clientX. Dispatch a plain bubbling
-// Event with clientX attached — React reads nativeEvent.clientX and native listeners read it too.
+// Event with clientX attached - React reads nativeEvent.clientX and native listeners read it too.
 // Wrapped in act() so the resulting state updates (and onTaskUpdate) flush before assertions.
 function pointer(node: Element | Document, type: string, clientX: number) {
   act(() => {
@@ -187,8 +187,11 @@ describe('@mantine/gantt/Gantt - Task Data', () => {
 
   it('handles tasks with dependencies', () => {
     const { container } = render(<Gantt tasks={mockTasks} />);
-    const dependencyLines = container.querySelectorAll('[class*="dependencyLine"]');
-    expect(dependencyLines.length).toBe(2);
+    // Each link renders a visible path plus its invisible click-target overlay.
+    const visibleLines = container.querySelectorAll(
+      'path[class*="dependencyLine"]:not([data-hit])'
+    );
+    expect(visibleLines.length).toBe(2);
   });
 
   it('handles tasks without dependencies', () => {
@@ -213,8 +216,8 @@ describe('critical path', () => {
     const { container } = render(<Gantt tasks={mockTasks} highlightCriticalPath />);
     // mockTasks is a simple chain 1 -> 2 -> 3: all critical
     expect(container.querySelectorAll('[class*="taskBar"][data-critical]').length).toBe(3);
-    // both dependency lines connect critical tasks
-    expect(container.querySelectorAll('polyline[data-critical]').length).toBe(2);
+    // both dependency lines connect critical tasks (paths with `d`, not the marker def)
+    expect(container.querySelectorAll('path[data-critical][d]').length).toBe(2);
   });
 
   it('does not mark anything without the prop', () => {
@@ -304,13 +307,17 @@ describe('hierarchy', () => {
     const { container } = render(<Gantt tasks={treeTasks} onToggleExpand={onToggleExpand} />);
 
     expect(container.querySelectorAll('[class*="mantine-Gantt-timelineRow"]').length).toBe(4);
-    expect(container.querySelectorAll('polyline[class*="dependencyLine"]').length).toBe(1);
+    expect(container.querySelectorAll('path[class*="dependencyLine"]:not([data-hit])').length).toBe(
+      1
+    );
 
     fireEvent.click(container.querySelector('[class*="expandChevron"]')!);
     expect(onToggleExpand).toHaveBeenCalledWith('p', false);
     expect(container.querySelectorAll('[class*="mantine-Gantt-timelineRow"]').length).toBe(2);
     expect(container.querySelectorAll('[class*="mantine-Gantt-taskListRow"]').length).toBe(2);
-    expect(container.querySelectorAll('polyline[class*="dependencyLine"]').length).toBe(0);
+    expect(container.querySelectorAll('path[class*="dependencyLine"]:not([data-hit])').length).toBe(
+      0
+    );
 
     fireEvent.click(container.querySelector('[class*="expandChevron"]')!);
     expect(onToggleExpand).toHaveBeenLastCalledWith('p', true);
@@ -394,7 +401,9 @@ describe('link cycle guard', () => {
     // Task 2 already depends on task 1, so linking 2 -> 1 would close a loop.
     const source = container.querySelector('[data-task-id="2"]')!;
     const target = container.querySelector('[data-task-id="1"]')!;
-    const arrowsBefore = container.querySelectorAll('[class*="dependencyLine"]').length;
+    const arrowsBefore = container.querySelectorAll(
+      'path[class*="dependencyLine"]:not([data-hit])'
+    ).length;
 
     // jsdom has no elementFromPoint; the hook uses it to find the drop target.
     (document as any).elementFromPoint = () => target;
@@ -405,7 +414,9 @@ describe('link cycle guard', () => {
 
     expect(onLinkCreate).not.toHaveBeenCalled();
     expect(onTasksChange).not.toHaveBeenCalled();
-    expect(container.querySelectorAll('[class*="dependencyLine"]')).toHaveLength(arrowsBefore);
+    expect(
+      container.querySelectorAll('path[class*="dependencyLine"]:not([data-hit])')
+    ).toHaveLength(arrowsBefore);
   });
 
   it('still creates an acyclic link', () => {
@@ -501,5 +512,197 @@ describe('task list width', () => {
   it('honours an explicit taskListWidth', () => {
     const { container } = render(<Gantt tasks={mockTasks} taskListWidth={240} />);
     expect(width(container)).toBe('240px');
+  });
+});
+
+describe('milestones', () => {
+  const milestoneTasks: GanttTask[] = [
+    { id: '1', label: 'Work', startDate: '2026-02-01', duration: 5, progress: 50 },
+    {
+      id: 'm',
+      label: 'Kickoff done',
+      startDate: '2026-02-04',
+      duration: 0,
+      progress: 0,
+      type: 'milestone',
+    },
+  ];
+
+  it('renders a milestone with data-milestone and a diamond element', () => {
+    const { container } = render(<Gantt tasks={milestoneTasks} />);
+    const bar = container.querySelector('[data-task-id="m"]')!;
+    expect(bar).toHaveAttribute('data-milestone');
+    expect(bar.querySelector('[class*="milestone"]')).toBeInTheDocument();
+    // No resize handles or progress fill on a zero-length marker.
+    expect(bar.querySelector('[class*="resizeHandle"]')).toBeNull();
+    expect(bar.querySelector('[class*="taskBarProgress"]')).toBeNull();
+  });
+
+  it('positions the diamond on its start day with one-column width', () => {
+    const { container } = render(
+      <Gantt tasks={milestoneTasks} startDate={new Date(2026, 1, 1)} columnWidth={40} />
+    );
+    const bar = container.querySelector('[data-task-id="m"]')!;
+    // Feb 4 is 3 days after the Feb 1 timeline start.
+    expect(bar).toHaveStyle({ left: '120px', width: '40px' });
+  });
+
+  it('can be moved by drag but not resized', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={milestoneTasks} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="m"]')!;
+
+    pointer(bar, 'pointerdown', 100);
+    pointer(document, 'pointermove', 140);
+    pointer(document, 'pointerup', 140);
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'm', startDate: '2026-02-05' })
+    );
+
+    // No resize handles are rendered for a milestone, so a resize gesture cannot start.
+    onTaskUpdate.mockClear();
+    expect(bar.querySelector('[class*="resizeHandle"]')).toBeNull();
+    expect(bar.querySelector('[class*="resizeHandleLeft"]')).toBeNull();
+    expect(onTaskUpdate).not.toHaveBeenCalled();
+  });
+
+  it('keyboard Shift+Arrow is a move (no resize) for milestones', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={milestoneTasks} onTaskUpdate={onTaskUpdate} />);
+    fireEvent.keyDown(container.querySelector('[data-task-id="m"]')!, {
+      key: 'ArrowRight',
+      shiftKey: true,
+    });
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'm', startDate: '2026-02-05', duration: 0 })
+    );
+  });
+
+  it('keeps milestones out of the timeline bounds shrinkage', () => {
+    const { container } = render(<Gantt tasks={milestoneTasks} />);
+    // Renders without crashing and both rows appear.
+    expect(container.querySelectorAll('[class*="timelineRow"]').length).toBe(2);
+  });
+});
+
+describe('link deletion', () => {
+  it('removes the dependency when its line is clicked and fires onLinkDelete once', () => {
+    const onLinkDelete = jest.fn();
+    const onTasksChange = jest.fn();
+    const { container } = render(
+      <StrictMode>
+        <Gantt defaultTasks={mockTasks} onLinkDelete={onLinkDelete} onTasksChange={onTasksChange} />
+      </StrictMode>
+    );
+    // mockTasks has two links; each renders as a <g> with a hit overlay + visible path.
+    const hitLines = container.querySelectorAll('path[class*="dependencyLine"][data-hit]');
+    expect(hitLines.length).toBe(2);
+
+    fireEvent.click(hitLines[0]);
+
+    expect(onLinkDelete).toHaveBeenCalledTimes(1);
+    expect(onTasksChange).toHaveBeenCalledTimes(1);
+    // One link remains after deleting the first.
+    expect(container.querySelectorAll('path[class*="dependencyLine"][data-hit]').length).toBe(1);
+  });
+
+  it('deletes a link when the click follows a pointerdown on the arrow (pan handler must not eat it)', () => {
+    const onLinkDelete = jest.fn();
+    const { container } = render(<Gantt defaultTasks={mockTasks} onLinkDelete={onLinkDelete} />);
+    const hitLine = container.querySelector('path[class*="dependencyLine"][data-hit]')!;
+
+    // Real browsers fire pointerdown before click; the timeline body's pan handler
+    // reacts to that pointerdown and used to swallow the trailing click.
+    fireEvent.pointerDown(hitLine);
+    fireEvent.click(hitLine);
+
+    expect(onLinkDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fire onLinkDelete when no callback-driven deletion happens without clicks', () => {
+    const onLinkDelete = jest.fn();
+    const { container } = render(<Gantt defaultTasks={mockTasks} onLinkDelete={onLinkDelete} />);
+    fireEvent.click(container.querySelector('[class*="taskBar"]')!);
+    expect(onLinkDelete).not.toHaveBeenCalled();
+  });
+});
+
+describe('auto-scheduling', () => {
+  const chain: GanttTask[] = [
+    { id: 'a', label: 'A', startDate: '2026-02-01', duration: 2, progress: 0 },
+    {
+      id: 'b',
+      label: 'B',
+      startDate: '2026-02-01',
+      duration: 2,
+      progress: 0,
+      dependencies: ['a'],
+    },
+    {
+      id: 'c',
+      label: 'C',
+      startDate: '2026-02-01',
+      duration: 2,
+      progress: 0,
+      dependencies: ['b'],
+    },
+  ];
+
+  it('cascades successors when autoSchedule is on', () => {
+    const onTasksChange = jest.fn();
+    const { container } = render(
+      <Gantt defaultTasks={chain} autoSchedule onTasksChange={onTasksChange} />
+    );
+
+    fireEvent.keyDown(container.querySelector('[data-task-id="a"]')!, { key: 'ArrowRight' });
+
+    const next = onTasksChange.mock.calls[0][0] as GanttTask[];
+    // a moved to Feb 2 → b pushed to Feb 4 (day after a's end), c to Feb 6.
+    expect(next.find((t) => t.id === 'b')!.startDate).toBe('2026-02-04');
+    expect(next.find((t) => t.id === 'c')!.startDate).toBe('2026-02-06');
+  });
+
+  it('does not cascade by default', () => {
+    const onTasksChange = jest.fn();
+    const { container } = render(<Gantt defaultTasks={chain} onTasksChange={onTasksChange} />);
+
+    fireEvent.keyDown(container.querySelector('[data-task-id="a"]')!, { key: 'ArrowRight' });
+
+    const next = onTasksChange.mock.calls[0][0] as GanttTask[];
+    expect(next.find((t) => t.id === 'b')!.startDate).toBe('2026-02-01');
+    expect(next.find((t) => t.id === 'c')!.startDate).toBe('2026-02-01');
+  });
+
+  it('controlled mode: reports cascaded list but does not move bars on its own', () => {
+    const onTasksChange = jest.fn();
+    const { container } = render(
+      <Gantt tasks={chain} autoSchedule onTasksChange={onTasksChange} />
+    );
+
+    fireEvent.keyDown(container.querySelector('[data-task-id="a"]')!, { key: 'ArrowRight' });
+
+    const next = onTasksChange.mock.calls[0][0] as GanttTask[];
+    expect(next.find((t) => t.id === 'b')!.startDate).toBe('2026-02-04');
+    // Parent ignored the change - bar stays put.
+    expect(container.querySelector('[data-task-id="b"]')!.getAttribute('aria-label')).toContain(
+      'starts 2026-02-01'
+    );
+  });
+});
+
+describe('tooltips', () => {
+  it('wraps the bar in a Mantine Tooltip when showTitle is enabled', async () => {
+    const { container } = render(<Gantt tasks={mockTasks} showTitle />);
+    // Mantine Tooltip renders a trigger wrapper around the bar; the tooltip itself
+    // only appears in the portal on hover/focus.
+    const bar = container.querySelector('[data-task-id="1"]')!;
+    expect(bar.closest('.mantine-Tooltip-tooltip')).toBeNull(); // not open yet
+    expect(bar).toBeInTheDocument();
+  });
+
+  it('does not wrap bars when showTitle is disabled', () => {
+    const { container } = render(<Gantt tasks={mockTasks} showTitle={false} />);
+    const row = container.querySelectorAll('[class*="timelineRow"]')[0];
+    expect(row).not.toHaveAttribute('title');
   });
 });

@@ -81,15 +81,15 @@ MyComponent.displayName = '@mantine/core/MyComponent';
 MyComponent.classes = classes;
 ```
 
-## Factory variant — which to use
+## Factory variant - which to use
 
 | Scenario                                          | Factory function       | Type                                                               |
 | ------------------------------------------------- | ---------------------- | ------------------------------------------------------------------ |
 | Standard component                                | `factory()`            | `Factory<{}>`                                                      |
-| Supports `component` prop (polymorphic)           | `polymorphicFactory()` | `PolymorphicFactory<{}>` — add `defaultComponent` and `defaultRef` |
+| Supports `component` prop (polymorphic)           | `polymorphicFactory()` | `PolymorphicFactory<{}>` - add `defaultComponent` and `defaultRef` |
 | Props change based on a generic (e.g. `multiple`) | `genericFactory()`     | `Factory<{ signature: ... }>`                                      |
 
-Use `polymorphicFactory` sparingly — it adds TypeScript overhead and slows IDE autocomplete.
+Use `polymorphicFactory` sparingly - it adds TypeScript overhead and slows IDE autocomplete.
 
 ## Factory type fields
 
@@ -128,5 +128,5 @@ const theme = createTheme({
 
 ## References
 
-- **[`references/api.md`](references/api.md)** — All imports: `factory`, `useProps`, `useStyles`, `createVarsResolver`, `createSafeContext`, `StylesApiProps`, `CompoundStylesApiProps`, `BoxProps`, `ElementProps`, theme helpers (`getSize`, `getRadius`, etc.)
-- **[`references/patterns.md`](references/patterns.md)** — Full examples: compound components with context, polymorphic component, generic component, theme integration
+- **[`references/api.md`](references/api.md)** - All imports: `factory`, `useProps`, `useStyles`, `createVarsResolver`, `createSafeContext`, `StylesApiProps`, `CompoundStylesApiProps`, `BoxProps`, `ElementProps`, theme helpers (`getSize`, `getRadius`, etc.)
+- **[`references/patterns.md`](references/patterns.md)** - Full examples: compound components with context, polymorphic component, generic component, theme integration

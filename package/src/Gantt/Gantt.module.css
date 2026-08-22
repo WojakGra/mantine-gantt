@@ -56,7 +56,7 @@
 }
 
 /* Sizer for row virtualization: full list height, the rows scrolled off above are
-   padding-top. Padding must NOT go on .taskListBody — it is a flex item, and padding is
+   padding-top. Padding must NOT go on .taskListBody - it is a flex item, and padding is
    added to its flex base size, so the header would be squeezed to nothing. */
 .taskListContent {
   box-sizing: border-box;
@@ -344,6 +344,32 @@
   outline-offset: 2px;
 }
 
+/* Milestone: zero-length marker rendered as a diamond centered on its start day.
+   The bar itself is transparent; the diamond carries the color. */
+.taskBar[data-milestone] {
+  background-color: transparent;
+  box-shadow: none;
+  justify-content: center;
+}
+
+.milestone {
+  width: calc((var(--gantt-row-height) - 16px) * 0.7);
+  height: calc((var(--gantt-row-height) - 16px) * 0.7);
+  background-color: var(--task-bar-color, var(--mantine-primary-color-filled));
+  transform: rotate(45deg);
+  border-radius: 2px;
+  box-shadow: var(--mantine-shadow-xs);
+  pointer-events: none;
+}
+
+.taskBar[data-milestone][data-critical] .milestone {
+  background-color: var(--gantt-critical-color);
+}
+
+.taskBar[data-milestone][data-dragging] {
+  opacity: 0.9;
+}
+
 .taskBar[data-dragging] {
   cursor: grabbing;
   box-shadow: var(--mantine-shadow-md);
@@ -542,13 +568,27 @@
 
 .dependencyLine {
   fill: none;
-  stroke: light-dark(var(--mantine-color-gray-6), var(--mantine-color-gray-5));
+  stroke: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
   stroke-width: 1.5;
+  stroke-linecap: round;
   pointer-events: stroke;
+  transition:
+    stroke 150ms ease,
+    stroke-width 150ms ease;
 }
 
-.dependencyLine:hover {
-  stroke: light-dark(var(--mantine-color-gray-8), var(--mantine-color-gray-3));
+/* Invisible fat overlay widening the click target of the visible line above it. */
+.dependencyLine[data-hit] {
+  stroke: transparent;
+  stroke-width: 12;
+  cursor: pointer;
+}
+
+/* Hover is driven from the hit overlay (it sits on top), restyled onto its visible
+   sibling via :hover on the group. */
+g:hover .dependencyLine:not([data-hit]) {
+  stroke: light-dark(var(--mantine-color-gray-8), var(--mantine-color-gray-4));
+  stroke-width: 2.5;
 }
 
 .dependencyLine[data-critical] {
@@ -556,10 +596,24 @@
   stroke-width: 2.5;
 }
 
-.linkArrow {
-  fill: light-dark(var(--mantine-color-gray-6), var(--mantine-color-gray-5));
+.dependencyLine[data-preview] {
+  stroke: var(--mantine-primary-color-filled);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  animation: gantt-link-dash 500ms linear infinite;
 }
 
-.linkArrow[data-critical] {
-  fill: var(--gantt-critical-color);
+@keyframes gantt-link-dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+.linkArrow {
+  /* context-stroke makes the arrowhead inherit the stroke color of the line that
+     references the marker - including :hover and [data-critical] states, which plain
+     CSS can't reach (marker content lives in <defs> and doesn't match selectors on
+     the referencing element). Fallback for older browsers is a neutral gray. */
+  fill: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-3));
+  fill: context-stroke;
 }

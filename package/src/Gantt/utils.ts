@@ -103,7 +103,7 @@ export function generateWeekHeaders(
     const label = actualStart.format('MMM');
 
     // isoWeek() numbers Monday-based weeks, so a Sunday-start week takes the number
-    // of the Monday it contains — otherwise its Sunday would report the previous week.
+    // of the Monday it contains - otherwise its Sunday would report the previous week.
     const weekNumber = current.add(weekStart === 0 ? 1 : 0, 'day').isoWeek();
 
     weeks.push({
@@ -142,7 +142,7 @@ export function calculateTimelineBounds(
   }
 
   if (tasks.length === 0) {
-    // Today is only the fallback — an explicitly passed bound always wins.
+    // Today is only the fallback - an explicitly passed bound always wins.
     const today = dayjs();
     return {
       start: startDate ? normalize(startDate) : today.subtract(padding, 'day'),
@@ -160,6 +160,7 @@ export function calculateTimelineBounds(
     if (taskStart.isBefore(earliest)) {
       earliest = taskStart;
     }
+    // getTaskEndDate clamps to ≥ start, so this can never move `latest` backwards.
     if (taskEnd.isAfter(latest)) {
       latest = taskEnd;
     }
@@ -190,14 +191,15 @@ export function formatTaskDate(date: string | Date | Dayjs): string {
 }
 
 /**
- * Calculate end date from start date and duration
+ * Calculate end date from start date and duration. Duration is inclusive of the start
+ * day; a milestone (duration 0) starts and ends on the same day.
  */
 export function getTaskEndDate(startDate: string, duration: number): Dayjs {
-  return dayjs(startDate).add(duration - 1, 'day');
+  return dayjs(startDate).add(Math.max(0, duration - 1), 'day');
 }
 
 /**
- * True when making `toId` depend on `fromId` would close a dependency cycle — i.e. `fromId`
+ * True when making `toId` depend on `fromId` would close a dependency cycle - i.e. `fromId`
  * already depends on `toId`, directly or transitively. Self-links count as a cycle. Tolerates
  * an already-cyclic input graph (visited set), unknown ids are ignored.
  */
@@ -351,7 +353,7 @@ export function getEffectiveTask(row: GanttTreeRow): GanttTask {
  * (summary parents) are excluded from the graph entirely.
  */
 export function getCriticalPath(tasks: GanttTask[]): Set<string> {
-  // Summary parents are excluded from the CPM graph — only leaves carry a real
+  // Summary parents are excluded from the CPM graph - only leaves carry a real
   // schedule. A dependency edge pointing at a parent id then behaves like an
   // unknown id and is ignored.
   const leafTasks = buildTaskTree(tasks, new Set())
@@ -436,13 +438,120 @@ export function getCriticalPath(tasks: GanttTask[]): Set<string> {
 }
 
 /**
+ * Map of task id → ids of tasks that depend on it (successors). Unknown dependency ids
+ * are ignored; edges that would close a cycle are skipped, so the result is always a DAG
+ * even for cyclic input. Shared by CPM and auto-scheduling.
+ */
+export function buildSuccessorMap(tasks: GanttTask[]): Map<string, string[]> {
+  const successors = new Map<string, string[]>();
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+
+  // True when `fromId` already depends on `toId`, directly or transitively.
+  const dependsOn = (fromId: string, toId: string): boolean => {
+    if (fromId === toId) {
+      return true;
+    }
+    const seen = new Set<string>();
+    const stack = [fromId];
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      if (id === toId) {
+        return true;
+      }
+      if (seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+      stack.push(...(byId.get(id)?.dependencies ?? []));
+    }
+    return false;
+  };
+
+  tasks.forEach((task) => {
+    (task.dependencies ?? []).forEach((depId) => {
+      // Edge depId → task.id closes a cycle when depId already depends on task.id.
+      if (!byId.has(depId) || dependsOn(depId, task.id)) {
+        return;
+      }
+      successors.set(depId, [...(successors.get(depId) ?? []), task.id]);
+    });
+  });
+  return successors;
+}
+
+/**
+ * Auto-scheduling cascade: after `movedTaskId` moved/resized, push every transitive
+ * finish-to-start successor so it never starts before its predecessors end. Only leaves
+ * are cascaded - summary parents derive their schedule from children. Returns the input
+ * array unchanged when nothing needs to move. Assumes an acyclic dependency graph
+ * (guaranteed upstream by wouldCreateCycle); tolerates cyclic input without hanging by
+ * cascading only the DAG-reachable, topologically ordered part.
+ */
+export function applyAutoSchedule(tasks: GanttTask[], movedTaskId: string): GanttTask[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const successors = buildSuccessorMap(tasks);
+  const next = new Map(byId);
+
+  // Topological order over the successor DAG (Kahn). Nodes left with a positive
+  // indegree belong to a cyclic input and are left untouched.
+  const indegree = new Map<string, number>();
+  successors.forEach((succs) => succs.forEach((s) => indegree.set(s, (indegree.get(s) ?? 0) + 1)));
+  const queue = tasks.filter((t) => !indegree.has(t.id)).map((t) => t.id);
+  const order: string[] = [];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    order.push(id);
+    for (const succ of successors.get(id) ?? []) {
+      const d = (indegree.get(succ) ?? 0) - 1;
+      indegree.set(succ, d);
+      if (d === 0) {
+        queue.push(succ);
+      }
+    }
+  }
+
+  let changed = false;
+  for (const id of order) {
+    const task = next.get(id);
+    if (!task) {
+      continue;
+    }
+    // Earliest allowed start: the day after the latest predecessor's end.
+    let earliestStart: Dayjs | null = null;
+    for (const depId of task.dependencies ?? []) {
+      const dep = next.get(depId);
+      if (!dep) {
+        continue;
+      }
+      const depEnd = getTaskEndDate(dep.startDate, dep.duration).add(1, 'day');
+      if (!earliestStart || depEnd.isAfter(earliestStart)) {
+        earliestStart = depEnd;
+      }
+    }
+    if (!earliestStart) {
+      continue;
+    }
+    if (dayjs(task.startDate).isBefore(earliestStart)) {
+      next.set(id, { ...task, startDate: earliestStart.format('YYYY-MM-DD') });
+      changed = true;
+    }
+  }
+
+  // movedTaskId is not needed for the pure cascade (every task is checked against its
+  // predecessors), but keeping it in the signature documents intent and leaves room for
+  // a scoped optimization.
+  void movedTaskId;
+  return changed ? tasks.map((t) => next.get(t.id) ?? t) : tasks;
+}
+
+/**
  * Row range `[first, last)` to render for a scroller of fixed-height rows.
  *
  * Both ends are aligned to blocks of `overscan` rows, with one extra block of slack on each
  * side: the rendered set then only changes every `overscan` rows of scrolling instead of on
  * every scroll event, which is what keeps rows from flickering as they come into view.
  *
- * `viewportHeight <= 0` means "not measured yet" (first paint, jsdom) — render everything,
+ * `viewportHeight <= 0` means "not measured yet" (first paint, jsdom) - render everything,
  * because rendering nothing would blank the chart on environments that never measure.
  */
 export function visibleRowRange(
