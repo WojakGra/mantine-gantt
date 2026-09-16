@@ -326,14 +326,15 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
         } else {
           // Cancelled by Escape: the pointer is still down, so swallow the click that
           // follows the eventual pointerup instead.
-          document.addEventListener(
-            'pointerup',
-            () =>
-              requestAnimationFrame(() => {
-                didDragRef.current = false;
-              }),
-            { once: true }
-          );
+          const reset = () => {
+            document.removeEventListener('pointerup', reset);
+            document.removeEventListener('pointercancel', reset);
+            requestAnimationFrame(() => {
+              didDragRef.current = false;
+            });
+          };
+          document.addEventListener('pointerup', reset);
+          document.addEventListener('pointercancel', reset);
         }
       } else {
         didDragRef.current = false;

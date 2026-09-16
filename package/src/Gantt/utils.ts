@@ -40,6 +40,26 @@ export function durationToPixels(duration: number, columnWidth: number): number 
 }
 
 /**
+ * Left/right x of a task's visual: bar edges, or the diamond tips of a milestone.
+ * `.milestone` is (rowHeight - 16) * 0.7 square, rotated 45° and centered in a column-wide box,
+ * so its tips sit ±(side / √2) from the column center.
+ */
+export function barAnchors(
+  task: Pick<GanttTask, 'type' | 'startDate' | 'duration'>,
+  timelineStart: Dayjs,
+  columnWidth: number,
+  rowHeight: number
+): { left: number; right: number } {
+  const left = dateToPixel(task.startDate, timelineStart, columnWidth);
+  if (task.type === 'milestone') {
+    const center = left + columnWidth / 2;
+    const diamondHalf = ((rowHeight - 16) * 0.7) / Math.SQRT2;
+    return { left: center - diamondHalf, right: center + diamondHalf };
+  }
+  return { left, right: left + durationToPixels(task.duration, columnWidth) };
+}
+
+/**
  * Calculate duration from pixel width
  */
 export function pixelsToDuration(pixels: number, columnWidth: number): number {

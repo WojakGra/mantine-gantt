@@ -18,6 +18,7 @@ import { TimelineHeader } from './TimelineHeader';
 import type { GanttColumn, GanttFactory, GanttProps, GanttTask } from './types';
 import { useGanttDrag } from './use-gantt-drag';
 import {
+  barAnchors,
   buildTaskTree,
   calculateTimelineBounds,
   dateToPixel,
@@ -413,7 +414,9 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     // One column of context to the left of the target.
     body.scrollLeft = dateToPixel(date, bounds.start, effectiveColumnWidth) - effectiveColumnWidth;
     if (rowIndex >= 0) {
-      body.scrollTop = Math.max(0, rowIndex * rowHeight - (viewport.height - rowHeight) / 2);
+      // `body.clientHeight`, not `viewport.height`: on mount the measurement effect has not
+      // committed yet and the state is still 0.
+      body.scrollTop = Math.max(0, rowIndex * rowHeight - (body.clientHeight - rowHeight) / 2);
     }
     // Intentionally only re-runs when the target changes, not on every layout/row change.
   }, [scrollToKey]);
@@ -535,10 +538,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     if (srcIndex === -1) {
       return null;
     }
-    const src = rows[srcIndex];
-    const x1 =
-      dateToPixel(src.startDate, bounds.start, effectiveColumnWidth) +
-      durationToPixels(src.duration, effectiveColumnWidth);
+    const src = getEffectiveTask(rows[srcIndex]);
+    const x1 = barAnchors(src, bounds.start, effectiveColumnWidth, rowHeight).right;
     const y1 = srcIndex * rowHeight + rowHeight / 2;
     return { x1, y1, x2: active.linkCursor.x, y2: active.linkCursor.y };
   }, [active, rows, bounds.start, effectiveColumnWidth, rowHeight]);
@@ -619,7 +620,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                 <div
                   key={task.id}
                   {...getStyles('timelineRow')}
-                  data-first={index === 0 || undefined}
+                  data-first={index === Math.floor(scrollTop / rowHeight) || undefined}
                   title={showTitle ? task.label : undefined}
                   style={{ top: index * rowHeight }}
                 >

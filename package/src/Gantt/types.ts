@@ -224,7 +224,8 @@ export interface GanttBaseProps {
 
   /**
    * Scroll the timeline to `'today'`, a date, or a task (`{ taskId }`) - applied on mount
-   * and whenever the value changes. A task also scrolls its row into view.
+   * and whenever the value changes. A task also scrolls its row into view; a task hidden
+   * inside a collapsed parent is ignored (expand it first).
    */
   scrollTo?: 'today' | Date | { taskId: string };
 

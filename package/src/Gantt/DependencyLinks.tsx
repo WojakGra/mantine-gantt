@@ -2,7 +2,7 @@ import type { Dayjs } from 'dayjs';
 import React, { useId, useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
 import type { GanttDragType, GanttFactory, GanttTask, GanttTreeRow } from './types';
-import { dateToPixel, durationToPixels, getEffectiveTask } from './utils';
+import { barAnchors, getEffectiveTask } from './utils';
 
 // Horizontal stub before/after an elbow, and the default elbow rounding radius.
 const CORNER_OFFSET = 10;
@@ -62,17 +62,7 @@ export function DependencyLinks({
     const result: Array<{ id: string; points: string; critical: boolean }> = [];
     // Bar is vertically centered in the row, so midY is simply rowHeight / 2
     const barMidYOffset = rowHeight / 2;
-    // Milestone diamond: `.milestone` is (rowHeight - 16) * 0.7 square, rotated 45° and
-    // centered in a column-wide box, so its tips sit ±(side / √2) from the column center.
-    const diamondHalf = ((rowHeight - 16) * 0.7) / Math.SQRT2;
-    const anchors = (task: GanttTask) => {
-      const left = dateToPixel(task.startDate, startDate, columnWidth);
-      if (task.type === 'milestone') {
-        const center = left + columnWidth / 2;
-        return { left: center - diamondHalf, right: center + diamondHalf };
-      }
-      return { left, right: left + durationToPixels(task.duration, columnWidth) };
-    };
+    const anchors = (task: GanttTask) => barAnchors(task, startDate, columnWidth, rowHeight);
 
     rows.forEach((toRow) => {
       const deps = toRow.task.dependencies;
