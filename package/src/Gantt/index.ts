@@ -1,8 +1,4 @@
 export { Gantt } from './Gantt';
-export { TaskBar } from './TaskBar';
-export { TaskList } from './TaskList';
-export { TimelineGrid } from './TimelineGrid';
-export { TimelineHeader } from './TimelineHeader';
 
 export type {
   GanttProps,
@@ -19,12 +15,9 @@ export {
   pixelToDate,
   snapToGrid,
   durationToPixels,
-  pixelsToDuration,
   formatTaskDate,
   getTaskEndDate,
   calculateTimelineBounds,
-  generateDayHeaders,
-  generateWeekHeaders,
   wouldCreateCycle,
   buildSuccessorMap,
   applyAutoSchedule,

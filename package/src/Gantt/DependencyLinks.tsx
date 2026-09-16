@@ -2,7 +2,7 @@ import type { Dayjs } from 'dayjs';
 import React, { useId, useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
 import type { GanttDragType, GanttFactory, GanttTask, GanttTreeRow } from './types';
-import { dateToPixel, durationToPixels, getEffectiveTask } from './utils';
+import { barAnchors, getEffectiveTask } from './utils';
 
 // Horizontal stub before/after an elbow, and the default elbow rounding radius.
 const CORNER_OFFSET = 10;
@@ -62,6 +62,7 @@ export function DependencyLinks({
     const result: Array<{ id: string; points: string; critical: boolean }> = [];
     // Bar is vertically centered in the row, so midY is simply rowHeight / 2
     const barMidYOffset = rowHeight / 2;
+    const anchors = (task: GanttTask) => barAnchors(task, startDate, columnWidth, rowHeight);
 
     rows.forEach((toRow) => {
       const deps = toRow.task.dependencies;
@@ -89,12 +90,10 @@ export function DependencyLinks({
         }
 
         // Calculate base positions
-        let fromBarRight =
-          dateToPixel(fromTask.startDate, startDate, columnWidth) +
-          durationToPixels(fromTask.duration, columnWidth);
+        let fromBarRight = anchors(fromTask).right;
         const fromBarMidY = fromIndex * rowHeight + barMidYOffset;
 
-        let toBarLeft = dateToPixel(toTask.startDate, startDate, columnWidth);
+        let toBarLeft = anchors(toTask).left;
         const toBarMidY = toIndex * rowHeight + barMidYOffset;
 
         // Apply drag delta if this task is being dragged
@@ -270,6 +269,12 @@ function roundCorners(points: Array<[number, number]>, radius = 6): string {
     // whole short segment (e.g. the little stub before the arrowhead).
     const inLen = Math.hypot(x - prevX, y - prevY);
     const outLen = Math.hypot(nextX - x, nextY - y);
+    // Zero-length segment (source end and target start exactly 2 * CORNER_OFFSET apart):
+    // no corner to round, and dividing by the length would put NaN into the path.
+    if (inLen === 0 || outLen === 0) {
+      parts.push(`L ${x},${y}`);
+      continue;
+    }
     const r = Math.min(radius, inLen / 2, outLen / 2);
 
     const inX = x - ((x - prevX) / inLen) * r;

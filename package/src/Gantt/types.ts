@@ -91,6 +91,7 @@ export type GanttStylesNames =
   | 'resizeHandle'
   | 'resizeHandleLeft'
   | 'linkConnector'
+  | 'dragLabel'
   | 'dependencyLinks'
   | 'dependencyLine'
   | 'linkArrow';
@@ -136,14 +137,20 @@ export interface GanttBaseProps {
   /**
    * Automatically shift dependent tasks (finish-to-start, zero lag) when a task is
    * moved or resized, so successors never start before their predecessors finish.
-   * Default false.
+   * <br>Default: `false`.
    */
   autoSchedule?: boolean;
 
-  /** Width of each day column in pixels, default 40 */
+  /**
+   * Width of each day column in pixels
+   * <br>Default: `40`
+   */
   columnWidth?: number;
 
-  /** Height of each task row in pixels, default 44 */
+  /**
+   * Height of each task row in pixels
+   * <br>Default: `44`
+   */
   rowHeight?: number;
 
   /**
@@ -168,7 +175,9 @@ export interface GanttBaseProps {
    */
   endDate?: Date;
 
-  /** View mode: 'day' | 'week' | 'month', default 'day' */
+  /**
+   * View mode: 'day' | 'week' | 'month', default 'day'
+   */
   viewMode?: 'day' | 'week' | 'month';
 
   /**
@@ -177,19 +186,34 @@ export interface GanttBaseProps {
    */
   weekStart?: 0 | 1;
 
-  /** Whether to show task titles on hover, default false */
+  /**
+   * Whether to show task titles on hover
+   * <br>Default: `false`
+   * */
   showTitle?: boolean;
 
-  /** Whether to show today marker line, default true */
+  /**
+   * Whether to show today marker line
+   * <br>Default: `true`
+   * */
   showTodayMarker?: boolean;
 
-  /** Highlight the critical path (CPM over dependencies), default false */
+  /**
+   * Highlight the critical path (CPM over dependencies)
+   * <br>Default: `false`
+   */
   highlightCriticalPath?: boolean;
 
-  /** Color for critical bars and links, default 'red' */
+  /**
+   * Color for critical bars and links
+   * <br>Default: `red`
+   */
   criticalPathColor?: MantineColor;
 
-  /** Whether to render baseline bars for tasks that define `baseline`, default true */
+  /**
+   * Whether to render baseline bars for tasks that define `baseline`
+   * <br>Default: `true`
+   */
   showBaselines?: boolean;
 
   /** Ids of parents expanded initially; when omitted, all parents start expanded */
@@ -197,6 +221,34 @@ export interface GanttBaseProps {
 
   /** Called when a parent row is expanded or collapsed via its chevron */
   onToggleExpand?: (taskId: string, expanded: boolean) => void;
+
+  /**
+   * Scroll the timeline to `'today'`, a date, or a task (`{ taskId }`) - applied on mount
+   * and whenever the value changes. A task also scrolls its row into view; a task hidden
+   * inside a collapsed parent is ignored (expand it first).
+   */
+  scrollTo?: 'today' | Date | { taskId: string };
+
+  /**
+   * Marks non-working days (shaded columns in the grid/header)
+   * <br>Default: `Saturday and Sunday`
+   */
+  isNonWorkingDay?: (date: Date) => boolean;
+
+  /**
+   * Show the snapped start/end readout above a bar while it is dragged
+   * <br>Default: `true`
+   */
+  showDragLabel?: boolean;
+
+  /** Id of the selected task - its bar and list row get `data-selected` */
+  selectedTaskId?: string | null;
+
+  /**
+   * Called with the new day column width after a Ctrl+wheel zoom over the timeline
+   * (clamped to 8-200px). Zoom works uncontrolled too; the callback just reports it.
+   */
+  onColumnWidthChange?: (columnWidth: number) => void;
 }
 
 export type GanttFactory = Factory<{

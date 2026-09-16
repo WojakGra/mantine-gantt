@@ -18,6 +18,7 @@ import { TimelineHeader } from './TimelineHeader';
 import type { GanttColumn, GanttFactory, GanttProps, GanttTask } from './types';
 import { useGanttDrag } from './use-gantt-drag';
 import {
+  barAnchors,
   buildTaskTree,
   calculateTimelineBounds,
   dateToPixel,
@@ -54,6 +55,7 @@ const defaultProps: Partial<GanttProps> = {
   criticalPathColor: 'red',
   showBaselines: true,
   autoSchedule: false,
+  showDragLabel: true,
 };
 
 const varsResolver = createVarsResolver<GanttFactory>(
@@ -101,13 +103,23 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     showBaselines,
     defaultExpandedIds,
     onToggleExpand,
+    scrollTo,
+    isNonWorkingDay,
+    selectedTaskId,
+    onColumnWidthChange,
+    showDragLabel,
     ...others
   } = props;
+
+  // Ctrl+wheel zoom; null = follow the prop. Reset whenever the prop itself changes.
+  const [zoomWidth, setZoomWidth] = useState<number | null>(null);
+  useEffect(() => setZoomWidth(null), [columnWidth]);
+  const baseColumnWidth = zoomWidth ?? columnWidth;
 
   const getStyles = useStyles<GanttFactory>({
     name: 'Gantt',
     classes,
-    props,
+    props: { ...props, columnWidth: baseColumnWidth },
     className,
     style,
     classNames,
@@ -124,15 +136,15 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   const effectiveColumnWidth = useMemo(() => {
     switch (viewMode) {
       case 'month':
-        return Math.max(columnWidth / 6, 7); // Each day is 1/6th, min 7px
+        return Math.max(baseColumnWidth / 6, 7); // Each day is 1/6th, min 7px
       case 'week':
-        return Math.max(columnWidth / 2, 14); // Each day is 1/2nd, min 14px
+        return Math.max(baseColumnWidth / 2, 14); // Each day is 1/2nd, min 14px
       case 'day':
       default:
         // Clamp to ≥1 so columnWidth={0} can't produce division-by-zero (deltaX / width).
-        return Math.max(columnWidth, 1);
+        return Math.max(baseColumnWidth, 1);
     }
-  }, [viewMode, columnWidth]);
+  }, [viewMode, baseColumnWidth]);
 
   // Controlled (`tasks` + `onTasksChange`) or uncontrolled (`defaultTasks`) - in controlled
   // mode nothing is stored here, every change goes out through onTasksChange.
@@ -332,6 +344,83 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     return () => observer.disconnect();
   }, []);
 
+  // Ctrl+wheel zooms the day column width around the cursor. Native listener because React's
+  // wheel handler is passive and cannot preventDefault the browser's page zoom.
+  const zoomAnchorRef = useRef(0);
+  const zoomRef = useRef({ width: baseColumnWidth, onChange: onColumnWidthChange });
+  zoomRef.current = { width: baseColumnWidth, onChange: onColumnWidthChange };
+  useEffect(() => {
+    const body = timelineBodyRef.current;
+    if (!body) {
+      return undefined;
+    }
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) {
+        return;
+      }
+      e.preventDefault();
+      zoomAnchorRef.current = e.clientX - body.getBoundingClientRect().left;
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const next = Math.round(Math.min(200, Math.max(8, zoomRef.current.width * factor)));
+      setZoomWidth(next);
+      zoomRef.current.onChange?.(next);
+    };
+    body.addEventListener('wheel', onWheel, { passive: false });
+    return () => body.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // When the column width changes (zoom, viewMode) keep the date under the zoom anchor
+  // (cursor for wheel zoom, left edge otherwise) at the same screen position.
+  const prevColumnWidthRef = useRef(effectiveColumnWidth);
+  useLayoutEffect(() => {
+    const prev = prevColumnWidthRef.current;
+    if (prev === effectiveColumnWidth) {
+      return;
+    }
+    prevColumnWidthRef.current = effectiveColumnWidth;
+    const body = timelineBodyRef.current;
+    if (body) {
+      const anchor = zoomAnchorRef.current;
+      body.scrollLeft = (body.scrollLeft + anchor) * (effectiveColumnWidth / prev) - anchor;
+    }
+    zoomAnchorRef.current = 0;
+  }, [effectiveColumnWidth]);
+
+  // Programmatic scroll: on mount and whenever `scrollTo` changes (by value, not identity).
+  const scrollToKey =
+    scrollTo instanceof Date
+      ? scrollTo.getTime()
+      : typeof scrollTo === 'object' && scrollTo
+        ? `task:${scrollTo.taskId}`
+        : scrollTo;
+  useEffect(() => {
+    const body = timelineBodyRef.current;
+    if (!scrollTo || !body) {
+      return;
+    }
+    let date: dayjs.Dayjs;
+    let rowIndex = -1;
+    if (scrollTo === 'today') {
+      date = dayjs();
+    } else if (scrollTo instanceof Date) {
+      date = dayjs(scrollTo);
+    } else {
+      rowIndex = rows.findIndex((r) => r.task.id === scrollTo.taskId);
+      if (rowIndex === -1) {
+        return;
+      }
+      date = dayjs(rows[rowIndex].startDate);
+    }
+    // One column of context to the left of the target.
+    body.scrollLeft = dateToPixel(date, bounds.start, effectiveColumnWidth) - effectiveColumnWidth;
+    if (rowIndex >= 0) {
+      // `body.clientHeight`, not `viewport.height`: on mount the measurement effect has not
+      // committed yet and the state is still 0.
+      body.scrollTop = Math.max(0, rowIndex * rowHeight - (body.clientHeight - rowHeight) / 2);
+    }
+    // Intentionally only re-runs when the target changes, not on every layout/row change.
+  }, [scrollToKey]);
+
   // Stable so TaskBar's memo comparator can rely on reference equality.
   const handleTaskClick = useCallback(
     (task: GanttTask) => {
@@ -343,34 +432,82 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   // Drag-to-pan the timeline with the mouse on empty space (the scrollbar is hidden). Bars and
   // handles stopPropagation on pointerdown, so any pointerdown reaching here is empty canvas.
   // Touch/pen keep native scroll+momentum - only mouse lacks a grab affordance.
-  const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const handlePanStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  // Middle button: hold-and-drag autoscroll (like Windows browsers do natively, but on every
+  // platform) - the scroll speed grows with the distance from the press point.
+  const panRef = useRef<{
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+    auto: boolean;
+    raf: number | null;
+  } | null>(null);
+  const autoScrollTick = useCallback(() => {
+    const pan = panRef.current;
     const body = timelineBodyRef.current;
-    if (e.pointerType !== 'mouse' || !body) {
+    if (!pan?.auto || !body) {
       return;
     }
-    e.preventDefault(); // stop text/SVG selection from starting
-    panRef.current = { x: e.clientX, y: e.clientY, left: body.scrollLeft, top: body.scrollTop };
-    body.setPointerCapture?.(e.pointerId);
-    body.style.cursor = 'grabbing';
-    document.body.style.userSelect = 'none';
+    // `left`/`top` hold the latest pointer position in auto mode. 8px dead zone, then
+    // 1px per frame for every 4px of distance, capped at 30px per frame.
+    const speed = (d: number) => Math.sign(d) * Math.min(30, Math.max(0, Math.abs(d) - 8) / 4);
+    body.scrollLeft += speed(pan.left - pan.x);
+    body.scrollTop += speed(pan.top - pan.y);
+    pan.raf = requestAnimationFrame(autoScrollTick);
   }, []);
+  const handlePanStart = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const body = timelineBodyRef.current;
+      if (e.pointerType !== 'mouse' || !body || (e.button && e.button !== 1)) {
+        return;
+      }
+      e.preventDefault(); // stop text/SVG selection (and the browser's own middle-click behavior)
+      const auto = e.button === 1;
+      panRef.current = auto
+        ? { x: e.clientX, y: e.clientY, left: e.clientX, top: e.clientY, auto, raf: null }
+        : {
+            x: e.clientX,
+            y: e.clientY,
+            left: body.scrollLeft,
+            top: body.scrollTop,
+            auto,
+            raf: null,
+          };
+      body.setPointerCapture?.(e.pointerId);
+      body.style.cursor = auto ? 'all-scroll' : 'grabbing';
+      document.body.style.userSelect = 'none';
+      if (auto) {
+        panRef.current.raf = requestAnimationFrame(autoScrollTick);
+      }
+    },
+    [autoScrollTick]
+  );
   const handlePanMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const pan = panRef.current;
     const body = timelineBodyRef.current;
     if (!pan || !body) {
       return;
     }
+    if (pan.auto) {
+      pan.left = e.clientX;
+      pan.top = e.clientY;
+      return;
+    }
     body.scrollLeft = pan.left - (e.clientX - pan.x);
     body.scrollTop = pan.top - (e.clientY - pan.y);
   }, []);
   const handlePanEnd = useCallback(() => {
+    if (panRef.current?.raf !== null && panRef.current?.raf !== undefined) {
+      cancelAnimationFrame(panRef.current.raf);
+    }
     panRef.current = null;
     document.body.style.userSelect = '';
     if (timelineBodyRef.current) {
       timelineBodyRef.current.style.cursor = '';
     }
   }, []);
+  // Unmount mid-autoscroll: stop the rAF loop.
+  useEffect(() => handlePanEnd, [handlePanEnd]);
 
   // Keep the viewport visually pinned whenever the timeline origin (bounds.start)
   // shifts - e.g. when bounds re-tighten on drag end. A date sits at pixel
@@ -401,10 +538,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     if (srcIndex === -1) {
       return null;
     }
-    const src = rows[srcIndex];
-    const x1 =
-      dateToPixel(src.startDate, bounds.start, effectiveColumnWidth) +
-      durationToPixels(src.duration, effectiveColumnWidth);
+    const src = getEffectiveTask(rows[srcIndex]);
+    const x1 = barAnchors(src, bounds.start, effectiveColumnWidth, rowHeight).right;
     const y1 = srcIndex * rowHeight + rowHeight / 2;
     return { x1, y1, x2: active.linkCursor.x, y2: active.linkCursor.y };
   }, [active, rows, bounds.start, effectiveColumnWidth, rowHeight]);
@@ -428,6 +563,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
         onToggleExpand={toggleExpand}
         offsetTop={firstRow * rowHeight}
         contentHeight={rows.length * rowHeight}
+        selectedTaskId={selectedTaskId}
       />
 
       {/* Right Pane - Timeline */}
@@ -441,6 +577,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
             totalWidth={timelineWidth}
             viewMode={viewMode}
             weekStart={weekStart}
+            isNonWorkingDay={isNonWorkingDay}
           />
         </div>
 
@@ -467,6 +604,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
               getStyles={getStyles}
               viewMode={viewMode}
               weekStart={weekStart}
+              isNonWorkingDay={isNonWorkingDay}
             />
 
             {/* Today line */}
@@ -482,11 +620,11 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                 <div
                   key={task.id}
                   {...getStyles('timelineRow')}
+                  data-first={index === Math.floor(scrollTop / rowHeight) || undefined}
                   title={showTitle ? task.label : undefined}
                   style={{ top: index * rowHeight }}
                 >
                   <TaskBar
-                    key={`taskbar-${task.id}`}
                     task={task}
                     startDate={bounds.start}
                     columnWidth={effectiveColumnWidth}
@@ -501,7 +639,9 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                     nudge={drag.nudge}
                     onTaskClick={handleTaskClick}
                     isCritical={criticalIds.has(task.id)}
+                    isSelected={task.id === selectedTaskId}
                     showTooltip={showTitle}
+                    showDragLabel={showDragLabel}
                   />
 
                   {showBaselines && task.baseline && (

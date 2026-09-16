@@ -5,4 +5,5 @@ export { viewMode } from './Gantt.demo.viewMode';
 export { criticalPath } from './Gantt.demo.criticalPath';
 export { milestones } from './Gantt.demo.milestones';
 export { autoSchedule } from './Gantt.demo.autoSchedule';
+export { navigation } from './Gantt.demo.navigation';
 // export { configurator } from './Gantt.demo.configurator';

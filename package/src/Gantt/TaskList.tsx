@@ -27,6 +27,7 @@ interface TaskListProps {
   offsetTop: number;
   /** Height of the whole list, visible or not - keeps scrollHeight in sync with the timeline. */
   contentHeight: number;
+  selectedTaskId?: string | null;
 }
 
 export function TaskList({
@@ -39,6 +40,7 @@ export function TaskList({
   onToggleExpand,
   offsetTop,
   contentHeight,
+  selectedTaskId,
 }: TaskListProps) {
   // Flex the first flexible column, fix the rest to their width. Set inline because the
   // column set is runtime data - same pattern as the timeline's inline geometry.
@@ -66,7 +68,12 @@ export function TaskList({
             const task = getEffectiveTask(row);
             const collapsed = collapsedIds.has(row.task.id);
             return (
-              <div key={row.task.id} {...getStyles('taskListRow')} style={{ gridTemplateColumns }}>
+              <div
+                key={row.task.id}
+                {...getStyles('taskListRow')}
+                data-selected={row.task.id === selectedTaskId || undefined}
+                style={{ gridTemplateColumns }}
+              >
                 {columns.map((col, i) => {
                   const content = col.render(task);
                   const indent =

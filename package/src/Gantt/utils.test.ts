@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import type { GanttTask } from './types';
 import {
   applyAutoSchedule,
+  barAnchors,
   buildSuccessorMap,
   buildTaskTree,
   calculateTimelineBounds,
@@ -669,5 +670,18 @@ describe('applyAutoSchedule', () => {
   it('ignores unknown dependency ids', () => {
     const tasks = [t('b', { dependencies: ['ghost'] })];
     expect(applyAutoSchedule(tasks, 'b')).toBe(tasks);
+  });
+});
+
+describe('barAnchors', () => {
+  const start = dayjs('2024-01-01');
+
+  it('uses bar edges for tasks and diamond tips for milestones', () => {
+    const base = { startDate: '2024-01-03', duration: 2 };
+    expect(barAnchors({ ...base, type: 'task' }, start, 40, 40)).toEqual({ left: 80, right: 160 });
+    const m = barAnchors({ ...base, type: 'milestone', duration: 0 }, start, 40, 40);
+    // Column center is 100; half-diagonal = (24 * 0.7) / √2 ≈ 11.88
+    expect(m.left).toBeCloseTo(100 - 11.88, 1);
+    expect(m.right).toBeCloseTo(100 + 11.88, 1);
   });
 });

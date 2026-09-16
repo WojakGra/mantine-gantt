@@ -35,6 +35,7 @@ export const GanttStylesApi: StylesApiData<GanttFactory> = {
     resizeHandle: 'Resize handle',
     resizeHandleLeft: 'Resize handle left',
     linkConnector: 'Link connector',
+    dragLabel: 'Snapped start/end readout shown above a bar while it is dragged',
     dependencyLinks: 'Dependency links SVG container',
     dependencyLine: 'Dependency link line',
     linkArrow: 'Dependency link arrowhead',
