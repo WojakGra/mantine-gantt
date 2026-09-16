@@ -46,22 +46,28 @@ export function pixelsToDuration(pixels: number, columnWidth: number): number {
   return Math.max(1, Math.round(pixels / columnWidth));
 }
 
+/** Default `isNonWorkingDay`: Saturday and Sunday. */
+export function isWeekend(date: Date): boolean {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
 /**
  * Generate timeline header data for days
  */
 export function generateDayHeaders(
   startDate: Dayjs,
-  endDate: Dayjs
+  endDate: Dayjs,
+  isNonWorkingDay: (date: Date) => boolean = isWeekend
 ): Array<{ date: Dayjs; label: string; isWeekend: boolean }> {
   const headers: Array<{ date: Dayjs; label: string; isWeekend: boolean }> = [];
   let current = startDate;
 
   while (current.isBefore(endDate) || current.isSame(endDate, 'day')) {
-    const dayOfWeek = current.day();
     headers.push({
       date: current,
       label: current.format('D'),
-      isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+      isWeekend: isNonWorkingDay(current.toDate()),
     });
     current = current.add(1, 'day');
   }
@@ -362,29 +368,11 @@ export function getCriticalPath(tasks: GanttTask[]): Set<string> {
 
   const byId = new Map(leafTasks.map((t) => [t.id, t]));
 
-  // Reduce to a DAG once: drop unknown ids and any edge that would close a cycle.
-  // Using this same reduced graph for both passes keeps earliest/latest finish
-  // consistent even when the input graph is cyclic.
-  const dagDeps = new Map<string, string[]>();
-  const visiting = new Set<string>();
-  const resolved = new Set<string>();
-  const resolveDeps = (id: string): void => {
-    if (resolved.has(id)) {
-      return;
-    }
-    visiting.add(id);
-    const deps: string[] = [];
-    for (const depId of byId.get(id)!.dependencies ?? []) {
-      if (byId.has(depId) && !visiting.has(depId)) {
-        deps.push(depId);
-        resolveDeps(depId);
-      }
-    }
-    dagDeps.set(id, deps);
-    visiting.delete(id);
-    resolved.add(id);
-  };
-  leafTasks.forEach((t) => resolveDeps(t.id));
+  // Reduce to a DAG once (unknown ids and cycle-closing edges dropped) and use the same
+  // graph for both passes, so earliest/latest finish stay consistent on cyclic input.
+  const successors = buildSuccessorMap(leafTasks);
+  const dagDeps = new Map<string, string[]>(leafTasks.map((t) => [t.id, []]));
+  successors.forEach((succs, depId) => succs.forEach((id) => dagDeps.get(id)!.push(depId)));
 
   // Forward pass: earliest finish, memoized DFS over the DAG.
   const earliestFinish = new Map<string, number>();
@@ -406,13 +394,6 @@ export function getCriticalPath(tasks: GanttTask[]): Set<string> {
   const projectEnd = leafTasks.length === 0 ? 0 : Math.max(...earliestFinish.values());
 
   // Backward pass: latest finish over the successor graph (reverse of the same DAG).
-  const successors = new Map<string, string[]>();
-  leafTasks.forEach((t) => {
-    dagDeps.get(t.id)!.forEach((depId) => {
-      successors.set(depId, [...(successors.get(depId) ?? []), t.id]);
-    });
-  });
-
   const latestFinish = new Map<string, number>();
   const getLF = (id: string): number => {
     const cached = latestFinish.get(id);
@@ -444,33 +425,13 @@ export function getCriticalPath(tasks: GanttTask[]): Set<string> {
  */
 export function buildSuccessorMap(tasks: GanttTask[]): Map<string, string[]> {
   const successors = new Map<string, string[]>();
-  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const ids = new Set(tasks.map((t) => t.id));
 
-  // True when `fromId` already depends on `toId`, directly or transitively.
-  const dependsOn = (fromId: string, toId: string): boolean => {
-    if (fromId === toId) {
-      return true;
-    }
-    const seen = new Set<string>();
-    const stack = [fromId];
-    while (stack.length > 0) {
-      const id = stack.pop()!;
-      if (id === toId) {
-        return true;
-      }
-      if (seen.has(id)) {
-        continue;
-      }
-      seen.add(id);
-      stack.push(...(byId.get(id)?.dependencies ?? []));
-    }
-    return false;
-  };
-
+  // ponytail: wouldCreateCycle rebuilds its id map per edge (O(edges * tasks)); share the map if it ever shows up hot.
   tasks.forEach((task) => {
     (task.dependencies ?? []).forEach((depId) => {
       // Edge depId → task.id closes a cycle when depId already depends on task.id.
-      if (!byId.has(depId) || dependsOn(depId, task.id)) {
+      if (!ids.has(depId) || wouldCreateCycle(tasks, depId, task.id)) {
         return;
       }
       successors.set(depId, [...(successors.get(depId) ?? []), task.id]);
@@ -537,9 +498,7 @@ export function applyAutoSchedule(tasks: GanttTask[], movedTaskId: string): Gant
     }
   }
 
-  // movedTaskId is not needed for the pure cascade (every task is checked against its
-  // predecessors), but keeping it in the signature documents intent and leaves room for
-  // a scoped optimization.
+  // Unused: the cascade checks every task against its predecessors. Kept for API stability.
   void movedTaskId;
   return changed ? tasks.map((t) => next.get(t.id) ?? t) : tasks;
 }

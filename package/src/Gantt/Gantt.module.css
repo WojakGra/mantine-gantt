@@ -33,18 +33,6 @@
   z-index: 10;
 }
 
-.taskListHeaderCell {
-  display: flex;
-  align-items: center;
-  padding: 0 var(--mantine-spacing-sm);
-  border-right: 1px solid var(--mantine-color-default-border);
-  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
-}
-
-.taskListHeaderCell:last-child {
-  border-right: none;
-}
-
 .taskListBody {
   flex: 1;
   scrollbar-width: none;
@@ -71,6 +59,10 @@
 
 .taskListRow:hover {
   background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+}
+
+.taskListRow[data-selected] {
+  background-color: light-dark(var(--mantine-primary-color-light), var(--mantine-color-dark-5));
 }
 
 .taskListCell {
@@ -160,8 +152,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Day view: one column per cell. Week view overrides width inline (days * columnWidth);
+     the first/last partial week can be narrower than its label, so clip instead of wrap. */
   width: var(--gantt-column-width, 40px);
-  min-width: var(--gantt-column-width, 40px);
+  flex-shrink: 0;
+  overflow: hidden;
+  white-space: nowrap;
   border-right: 1px solid var(--mantine-color-default-border);
   font-size: var(--mantine-font-size-xs);
   font-weight: 500;
@@ -208,6 +204,12 @@
 
 .weekHeaderCell:last-child {
   border-right: none;
+}
+
+/* Month view: the month row is the only row, so it fills the header. */
+.weekHeader[data-single-row] {
+  height: 100%;
+  border-bottom: none;
 }
 
 .timelineBody {
@@ -272,14 +274,6 @@
   top: 0;
   width: 1px;
   background-color: light-dark(rgb(0, 0, 0, 0.2), rgb(255, 255, 255, 0.15));
-}
-
-.rowLine {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background-color: var(--mantine-color-default-border);
 }
 
 /* ============================================
@@ -350,6 +344,12 @@
   background-color: transparent;
   box-shadow: none;
   justify-content: center;
+}
+
+/* Box is a column wide; hang the connector off the diamond's right tip instead. */
+.taskBar[data-milestone] .linkConnector {
+  right: auto;
+  left: calc(50% + (var(--gantt-row-height) - 16px) * 0.7 * 0.7071 + 4px);
 }
 
 .milestone {
@@ -448,6 +448,8 @@
   opacity: 0;
   transition: opacity 150ms ease;
   background: linear-gradient(to right, transparent, rgb(0, 0, 0, 0.1));
+  /* Above the label (z-index 1), which otherwise covers the handle on short bars. */
+  z-index: 2;
   touch-action: none;
 }
 
@@ -521,6 +523,32 @@
 .linkConnector:hover {
   transform: translateY(-50%) scale(1.2);
   background-color: var(--mantine-primary-color-filled);
+}
+
+.taskBar[data-selected] {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}
+
+/* Snapped start/end readout shown above the bar while it is dragged. */
+.dragLabel {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  padding: 2px 6px;
+  border-radius: var(--mantine-radius-sm);
+  background-color: light-dark(var(--mantine-color-dark-6), var(--mantine-color-gray-0));
+  color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
+  font-size: var(--mantine-font-size-xs);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 101;
+}
+
+/* The body clips at its top edge (scroll container), so the first row shows it below the bar. */
+.timelineRow[data-first] .dragLabel {
+  bottom: auto;
+  top: calc(100% + 4px);
 }
 
 .taskBar[data-link-target] {

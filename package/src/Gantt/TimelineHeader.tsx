@@ -12,6 +12,7 @@ interface TimelineHeaderProps {
   totalWidth: number;
   viewMode: 'day' | 'week' | 'month';
   weekStart: 0 | 1;
+  isNonWorkingDay?: (date: Date) => boolean;
 }
 
 export function TimelineHeader({
@@ -22,10 +23,14 @@ export function TimelineHeader({
   totalWidth,
   viewMode,
   weekStart,
+  isNonWorkingDay,
 }: TimelineHeaderProps) {
   const today = dayjs();
 
-  const dayHeaders = useMemo(() => generateDayHeaders(startDate, endDate), [startDate, endDate]);
+  const dayHeaders = useMemo(
+    () => generateDayHeaders(startDate, endDate, isNonWorkingDay),
+    [startDate, endDate, isNonWorkingDay]
+  );
 
   const weekHeaders = useMemo(
     () => generateWeekHeaders(startDate, endDate, weekStart),
@@ -53,61 +58,10 @@ export function TimelineHeader({
     return months;
   }, [startDate, endDate]);
 
-  if (viewMode === 'month') {
-    return (
-      <div {...getStyles('timelineHeaderInner', { style: { width: totalWidth } })}>
-        {/* Month row only - double height to span both rows */}
-        <div {...getStyles('weekHeader', { style: { height: '100%' } })}>
-          {monthHeaders.map((month, index) => (
-            <div
-              key={index}
-              {...getStyles('weekHeaderCell', {
-                style: { width: month.days * columnWidth, height: '100%', alignItems: 'center' },
-              })}
-            >
-              {month.label}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (viewMode === 'week') {
-    return (
-      <div {...getStyles('timelineHeaderInner', { style: { width: totalWidth } })}>
-        {/* Month row */}
-        <div {...getStyles('weekHeader')}>
-          {monthHeaders.map((month, index) => (
-            <div
-              key={index}
-              {...getStyles('weekHeaderCell', { style: { width: month.days * columnWidth } })}
-            >
-              {month.label}
-            </div>
-          ))}
-        </div>
-
-        {/* Week number row */}
-        <div {...getStyles('timelineHeaderRow')}>
-          {weekHeaders.map((week, index) => (
-            <div
-              key={index}
-              {...getStyles('timelineHeaderCell', { style: { width: week.days * columnWidth } })}
-            >
-              Week {week.weekNumber}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // Default: day view
   return (
     <div {...getStyles('timelineHeaderInner', { style: { width: totalWidth } })}>
-      {/* Month row */}
-      <div {...getStyles('weekHeader')}>
+      {/* Month row - the only row in month view */}
+      <div {...getStyles('weekHeader')} data-single-row={viewMode === 'month' || undefined}>
         {monthHeaders.map((month, index) => (
           <div
             key={index}
@@ -118,19 +72,33 @@ export function TimelineHeader({
         ))}
       </div>
 
-      {/* Day row */}
-      <div {...getStyles('timelineHeaderRow')}>
-        {dayHeaders.map((day, index) => (
-          <div
-            key={index}
-            {...getStyles('timelineHeaderCell')}
-            data-weekend={day.isWeekend || undefined}
-            data-today={day.date.isSame(today, 'day') || undefined}
-          >
-            {day.label}
-          </div>
-        ))}
-      </div>
+      {viewMode === 'week' && (
+        <div {...getStyles('timelineHeaderRow')}>
+          {weekHeaders.map((week, index) => (
+            <div
+              key={index}
+              {...getStyles('timelineHeaderCell', { style: { width: week.days * columnWidth } })}
+            >
+              Week {week.weekNumber}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {viewMode === 'day' && (
+        <div {...getStyles('timelineHeaderRow')}>
+          {dayHeaders.map((day, index) => (
+            <div
+              key={index}
+              {...getStyles('timelineHeaderCell')}
+              data-weekend={day.isWeekend || undefined}
+              data-today={day.date.isSame(today, 'day') || undefined}
+            >
+              {day.label}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

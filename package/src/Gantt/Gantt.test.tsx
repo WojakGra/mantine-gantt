@@ -515,6 +515,141 @@ describe('task list width', () => {
   });
 });
 
+describe('interaction extras', () => {
+  it('marks the selected task on its bar and list row', () => {
+    const { container } = render(<Gantt tasks={mockTasks} selectedTaskId="2" />);
+    expect(container.querySelector('[data-task-id="2"]')).toHaveAttribute('data-selected');
+    expect(container.querySelectorAll('[class*="taskListRow"][data-selected]')).toHaveLength(1);
+    expect(container.querySelector('[data-task-id="1"]')).not.toHaveAttribute('data-selected');
+  });
+
+  it('uses isNonWorkingDay for the shaded columns', () => {
+    const { container } = render(
+      <Gantt
+        tasks={mockTasks}
+        startDate={new Date(2026, 1, 1)}
+        endDate={new Date(2026, 1, 7)}
+        isNonWorkingDay={(d) => d.getDate() === 3}
+      />
+    );
+    expect(container.querySelectorAll('[class*="weekendBackground"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-weekend]')).toHaveLength(1);
+  });
+
+  it('Escape cancels a drag without committing', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={mockTasks} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+    pointer(bar, 'pointerdown', 100);
+    pointer(document, 'pointermove', 180);
+    expect(bar).toHaveAttribute('data-dragging');
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(bar).not.toHaveAttribute('data-dragging');
+    pointer(document, 'pointerup', 180);
+    expect(onTaskUpdate).not.toHaveBeenCalled();
+  });
+
+  it('middle button autoscrolls the timeline while held', () => {
+    // Capture rAF callbacks and run frames by hand, so nothing leaks into other tests.
+    const frames: FrameRequestCallback[] = [];
+    const raf = jest.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    const tick = () =>
+      act(() => {
+        frames.splice(0).forEach((cb) => cb(0));
+      });
+    try {
+      const { container } = render(<Gantt tasks={mockTasks} />);
+      const body = container.querySelector('[class*="timelineBody"]') as HTMLElement;
+      act(() => {
+        const event = new Event('pointerdown', { bubbles: true, cancelable: true });
+        Object.assign(event, { clientX: 100, clientY: 100, button: 1, pointerType: 'mouse' });
+        body.dispatchEvent(event);
+      });
+      pointer(body, 'pointermove', 148); // 48px right of the press: (48 - 8) / 4 = 10px per frame
+      tick();
+      tick();
+      tick();
+      expect(body.scrollLeft).toBe(30);
+      pointer(body, 'pointerup', 148);
+      tick();
+      expect(body.scrollLeft).toBe(30);
+    } finally {
+      raf.mockRestore();
+    }
+  });
+
+  it('ignores non-primary buttons on bars and empty canvas', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={mockTasks} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+    act(() => {
+      const event = new Event('pointerdown', { bubbles: true, cancelable: true });
+      Object.assign(event, { clientX: 100, clientY: 100, button: 1, pointerType: 'mouse' });
+      bar.dispatchEvent(event);
+    });
+    pointer(document, 'pointermove', 180);
+    pointer(document, 'pointerup', 180);
+    expect(onTaskUpdate).not.toHaveBeenCalled();
+  });
+
+  it('shows the snapped schedule while dragging', () => {
+    const { container } = render(<Gantt tasks={mockTasks} columnWidth={40} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+    pointer(bar, 'pointerdown', 100);
+    pointer(document, 'pointermove', 180); // +2 days
+    expect(bar.querySelector('[class*="dragLabel"]')).toHaveTextContent(
+      'Feb 3, 2026 → Feb 7, 2026'
+    );
+    pointer(document, 'pointerup', 180);
+    expect(bar.querySelector('[class*="dragLabel"]')).toBeNull();
+  });
+
+  it('showDragLabel={false} hides the readout', () => {
+    const { container } = render(<Gantt tasks={mockTasks} showDragLabel={false} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+    pointer(bar, 'pointerdown', 100);
+    pointer(document, 'pointermove', 180);
+    expect(bar.querySelector('[class*="dragLabel"]')).toBeNull();
+    pointer(document, 'pointerup', 180);
+  });
+
+  it('Ctrl+wheel zooms the column width and reports it', () => {
+    const onColumnWidthChange = jest.fn();
+    const { container } = render(
+      <Gantt tasks={mockTasks} columnWidth={40} onColumnWidthChange={onColumnWidthChange} />
+    );
+    const body = container.querySelector('[class*="timelineBody"]')!;
+    act(() => {
+      fireEvent.wheel(body, { deltaY: -100, ctrlKey: true });
+    });
+    expect(onColumnWidthChange).toHaveBeenCalledWith(44);
+    expect(container.querySelector('[data-task-id="1"]')).toHaveStyle({ width: '220px' });
+    act(() => {
+      fireEvent.wheel(body, { deltaY: 100 });
+    });
+    expect(onColumnWidthChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('scrollTo positions the timeline', () => {
+    const { container } = render(
+      <Gantt
+        tasks={mockTasks}
+        startDate={new Date(2026, 1, 1)}
+        columnWidth={40}
+        scrollTo={{ taskId: '3' }}
+      />
+    );
+    const body = container.querySelector('[class*="timelineBody"]') as HTMLElement;
+    // Feb 8 is 7 days after the Feb 1 start, minus one column of context.
+    expect(body.scrollLeft).toBe(240);
+  });
+});
+
 describe('milestones', () => {
   const milestoneTasks: GanttTask[] = [
     { id: '1', label: 'Work', startDate: '2026-02-01', duration: 5, progress: 50 },
@@ -536,6 +671,45 @@ describe('milestones', () => {
     // No resize handles or progress fill on a zero-length marker.
     expect(bar.querySelector('[class*="resizeHandle"]')).toBeNull();
     expect(bar.querySelector('[class*="taskBarProgress"]')).toBeNull();
+  });
+
+  it('anchors dependency links to the diamond tips, not the column box', () => {
+    const tasks = [
+      milestoneTasks[0],
+      { ...milestoneTasks[1], dependencies: ['1'] },
+      {
+        id: '2',
+        label: 'After',
+        startDate: '2026-02-10',
+        duration: 2,
+        progress: 0,
+        dependencies: ['m'],
+      },
+    ];
+    const { container } = render(
+      <Gantt tasks={tasks} startDate={new Date(2026, 1, 1)} columnWidth={40} rowHeight={44} />
+    );
+    const paths = container.querySelectorAll('path[marker-end]');
+    // Column center 140, diamond half-width (28 * 0.7) / √2 ≈ 13.86.
+    expect(paths[0].getAttribute('d')).toMatch(/L 126\.14\d*,66$/);
+    expect(paths[1].getAttribute('d')).toMatch(/^M 153\.85\d*,66 /);
+  });
+
+  it('draws a valid path when the gap between bars equals the elbow stubs', () => {
+    // 1-day gap in week view (20px) == 2 * CORNER_OFFSET: exit and entry stubs coincide.
+    const tasks: GanttTask[] = [
+      { id: 'a', label: 'A', startDate: '2026-03-05', duration: 7, progress: 0 },
+      {
+        id: 'b',
+        label: 'B',
+        startDate: '2026-03-12',
+        duration: 5,
+        progress: 0,
+        dependencies: ['a'],
+      },
+    ];
+    const { container } = render(<Gantt tasks={tasks} viewMode="week" columnWidth={40} />);
+    expect(container.querySelector('path[marker-end]')!.getAttribute('d')).not.toMatch(/NaN/);
   });
 
   it('positions the diamond on its start day with one-column width', () => {

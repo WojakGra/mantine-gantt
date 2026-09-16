@@ -477,6 +477,72 @@ export function WithHoverTitle() {
   );
 }
 
+export function ScrollToToday() {
+  const today = new Date();
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const tasks: GanttTask[] = [
+    { id: '1', label: 'Long ago', startDate: '2025-01-06', duration: 10, progress: 100 },
+    { id: '2', label: 'Now', startDate: iso(today), duration: 5, progress: 20 },
+  ];
+  const [target, setTarget] = useState<'today' | { taskId: string }>('today');
+  return (
+    <div style={{ padding: 20, height: 400 }}>
+      <button type="button" onClick={() => setTarget('today')}>
+        Today
+      </button>{' '}
+      <button type="button" onClick={() => setTarget({ taskId: '1' })}>
+        Task "Long ago"
+      </button>
+      <Gantt defaultTasks={tasks} scrollTo={target} />
+    </div>
+  );
+}
+
+export function NonWorkingDays() {
+  // Fridays off + one holiday.
+  const isNonWorkingDay = (d: Date) =>
+    d.getDay() === 5 ||
+    d.getDay() === 0 ||
+    d.getDay() === 6 ||
+    d.toDateString() === 'Mon Feb 16 2026';
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt defaultTasks={mockTasks} isNonWorkingDay={isNonWorkingDay} />
+    </div>
+  );
+}
+
+export function Selection() {
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>('2');
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <p>Selected: {selectedTaskId ?? 'none'}</p>
+      <Gantt
+        defaultTasks={mockTasks}
+        selectedTaskId={selectedTaskId}
+        onTaskClick={(task) => setSelectedTaskId((id) => (id === task.id ? null : task.id))}
+      />
+    </div>
+  );
+}
+
+export function ZoomAndAutoscroll() {
+  const [columnWidth, setColumnWidth] = useState(40);
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <p>
+        Ctrl+wheel over the timeline to zoom (column width: {columnWidth}px). Hold the middle mouse
+        button and move to autoscroll. Escape cancels a drag.
+      </p>
+      <Gantt
+        defaultTasks={mockTasks}
+        columnWidth={columnWidth}
+        onColumnWidthChange={setColumnWidth}
+      />
+    </div>
+  );
+}
+
 export function WeekView() {
   return (
     <div style={{ padding: 20, height: 600 }}>

@@ -1,8 +1,8 @@
-import type { Dayjs } from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import React from 'react';
 import { getThemeColor, Tooltip, useMantineTheme, type GetStylesApi } from '@mantine/core';
 import type { GanttDragType, GanttFactory, GanttTask } from './types';
-import { dateToPixel, durationToPixels, formatTaskDate, getTaskEndDate } from './utils';
+import { dateToPixel, durationToPixels, formatTaskDate, getTaskEndDate, snapToGrid } from './utils';
 
 interface TaskBarProps {
   task: GanttTask;
@@ -12,12 +12,15 @@ interface TaskBarProps {
   isDragging?: boolean;
   /** True when this bar is the current link drop target (highlight it). */
   isLinkTarget?: boolean;
+  isSelected?: boolean;
   /** True when this task is on the critical path. */
   isCritical?: boolean;
   /** True when this task has children and renders as a non-interactive summary bar. */
   isSummary?: boolean;
   /** Show a Mantine Tooltip with the task's schedule on hover. */
   showTooltip?: boolean;
+  /** Show the snapped schedule readout while this bar is dragged. */
+  showDragLabel?: boolean;
   /** Active drag type when THIS bar is the one being dragged, else null. */
   dragType?: GanttDragType | null;
   /** Continuous, scroll-adjusted px delta for the active drag of THIS bar. */
@@ -37,7 +40,9 @@ function TaskBarComponent({
   isLinkTarget,
   isCritical,
   isSummary,
+  isSelected,
   showTooltip,
+  showDragLabel = true,
   dragType,
   dragDeltaX = 0,
   startDrag,
@@ -71,6 +76,25 @@ function TaskBarComponent({
     visualWidth = baseWidth - delta;
   }
 
+  // Live schedule readout while dragging, snapped the same way `commit` will snap.
+  let dragLabel: string | null = null;
+  if (showDragLabel && dragType && dragType !== 'link' && dragDeltaX !== 0) {
+    const days = Math.round(snapToGrid(dragDeltaX, columnWidth) / columnWidth);
+    const start = dayjs(task.startDate);
+    if (dragType === 'move') {
+      const s = start.add(days, 'day');
+      dragLabel = isMilestone
+        ? formatTaskDate(s)
+        : `${formatTaskDate(s)} → ${formatTaskDate(getTaskEndDate(s.format('YYYY-MM-DD'), task.duration))}`;
+    } else if (dragType === 'resize-end') {
+      const d = Math.max(1, task.duration + days);
+      dragLabel = `${formatTaskDate(getTaskEndDate(task.startDate, d))} (${d}d)`;
+    } else {
+      const d = Math.max(1, task.duration - days);
+      dragLabel = `${formatTaskDate(start.add(task.duration - d, 'day'))} (${d}d)`;
+    }
+  }
+
   const tooltipLabel = isMilestone
     ? `${task.label} - ${formatTaskDate(task.startDate)}`
     : `${task.label} - ${formatTaskDate(task.startDate)} → ${formatTaskDate(
@@ -88,6 +112,7 @@ function TaskBarComponent({
       data-critical={isCritical || undefined}
       data-summary={isSummary || undefined}
       data-milestone={isMilestone || undefined}
+      data-selected={isSelected || undefined}
       aria-label={
         isSummary
           ? `${task.label}, summary, starts ${task.startDate}, ${task.duration} day duration.`
@@ -157,6 +182,12 @@ function TaskBarComponent({
         />
       )}
 
+      {dragLabel && (
+        <div {...getStyles('dragLabel')} aria-hidden="true">
+          {dragLabel}
+        </div>
+      )}
+
       {/* Link connector (right side) */}
       {!isSummary && (
         <div
@@ -195,8 +226,10 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.isDragging === nextProps.isDragging &&
     prevProps.isLinkTarget === nextProps.isLinkTarget &&
     prevProps.isCritical === nextProps.isCritical &&
+    prevProps.isSelected === nextProps.isSelected &&
     prevProps.isSummary === nextProps.isSummary &&
     prevProps.showTooltip === nextProps.showTooltip &&
+    prevProps.showDragLabel === nextProps.showDragLabel &&
     prevProps.dragType === nextProps.dragType &&
     prevProps.dragDeltaX === nextProps.dragDeltaX &&
     prevProps.startDrag === nextProps.startDrag &&

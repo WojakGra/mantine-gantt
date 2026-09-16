@@ -9,6 +9,12 @@ const MAX_SCROLL_SPEED = 12;
 // Pointer must travel this far before a drag begins, so a plain click still fires onTaskClick.
 const DRAG_ACTIVATION_DISTANCE = 5;
 
+/** Id of the task bar under a client point, via the DOM (`data-task-id`). */
+function taskIdAt(clientX: number, clientY: number): string | null {
+  const el = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-task-id]');
+  return el?.dataset.taskId ?? null;
+}
+
 /** Live drag state, shared with TaskBar (bar geometry) and DependencyLinks (arrows + link line). */
 export interface GanttDragState {
   type: GanttDragType;
@@ -75,6 +81,8 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
   optsRef.current = options;
 
   const dragRef = useRef<DragRef | null>(null);
+  // Latest endDrag, so the document listeners below can stay referentially stable.
+  const endDragRef = useRef<(commitDrag: boolean) => void>(() => {});
   const rafRef = useRef<number | null>(null);
   const scrollVec = useRef({ x: 0, y: 0 });
   const didDragRef = useRef(false);
@@ -100,11 +108,8 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       const rect = content?.getBoundingClientRect();
       const x = rect ? drag.lastClientX - rect.left : 0;
       const y = rect ? drag.lastClientY - rect.top : 0;
-      // Hit-test the task under the cursor via the DOM (O(1) per move).
-      // ponytail: elementFromPoint is fine here; cache row rects on drag start if it ever shows up hot.
-      const el = document.elementFromPoint(drag.lastClientX, drag.lastClientY);
-      const targetEl = el?.closest('[data-task-id]') as HTMLElement | null;
-      const targetId = targetEl?.dataset.taskId ?? null;
+      // ponytail: elementFromPoint per move is fine; cache row rects on drag start if it ever shows up hot.
+      const targetId = taskIdAt(drag.lastClientX, drag.lastClientY);
       setState({
         type: 'link',
         taskId: drag.taskId,
@@ -215,9 +220,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
     } = optsRef.current;
 
     if (drag.type === 'link') {
-      const el = document.elementFromPoint(drag.lastClientX, drag.lastClientY);
-      const targetEl = el?.closest('[data-task-id]') as HTMLElement | null;
-      const toTaskId = targetEl?.dataset.taskId;
+      const toTaskId = taskIdAt(drag.lastClientX, drag.lastClientY);
       if (!toTaskId || toTaskId === drag.taskId) {
         return;
       }
@@ -290,31 +293,65 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
     }
   }, []);
 
-  const handlePointerUp = useCallback(() => {
-    const drag = dragRef.current;
+  const handlePointerUp = useCallback(() => endDragRef.current(true), []);
+  // Escape cancels the drag: the bar snaps back and nothing is committed.
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      endDragRef.current(false);
+    }
+  }, []);
+
+  const detach = useCallback(() => {
     document.removeEventListener('pointermove', handlePointerMove);
     document.removeEventListener('pointerup', handlePointerUp);
     document.removeEventListener('pointercancel', handlePointerUp);
+    document.removeEventListener('keydown', handleKeyDown);
     stopAutoScroll();
     document.body.style.userSelect = '';
     document.body.style.cursor = '';
+  }, [handlePointerMove, handlePointerUp, handleKeyDown, stopAutoScroll]);
 
-    if (drag && drag.moved) {
-      commit(drag);
-      // Swallow the click that follows a real drag (see didDrag).
-      requestAnimationFrame(() => {
+  const endDrag = useCallback(
+    (commitDrag: boolean) => {
+      const drag = dragRef.current;
+      detach();
+
+      if (drag && drag.moved) {
+        if (commitDrag) {
+          commit(drag);
+          // Swallow the click that follows a real drag (see didDrag).
+          requestAnimationFrame(() => {
+            didDragRef.current = false;
+          });
+        } else {
+          // Cancelled by Escape: the pointer is still down, so swallow the click that
+          // follows the eventual pointerup instead.
+          document.addEventListener(
+            'pointerup',
+            () =>
+              requestAnimationFrame(() => {
+                didDragRef.current = false;
+              }),
+            { once: true }
+          );
+        }
+      } else {
         didDragRef.current = false;
-      });
-    } else {
-      didDragRef.current = false;
-    }
+      }
 
-    dragRef.current = null;
-    setState(null);
-  }, [commit, handlePointerMove, stopAutoScroll]);
+      dragRef.current = null;
+      setState(null);
+    },
+    [commit, detach]
+  );
+  endDragRef.current = endDrag;
 
   const startDrag = useCallback(
     (type: GanttDragType, taskId: string, event: React.PointerEvent) => {
+      // Only the primary button drags; middle/right bubble up (browser autoscroll, context menu).
+      if (event.button) {
+        return;
+      }
       event.stopPropagation();
       const body = optsRef.current.bodyRef.current;
       dragRef.current = {
@@ -331,8 +368,9 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       // pointercancel: the OS/browser can take the gesture over (touch scrolling, alerts) -
       // treat it like pointerup so cursors/listeners/auto-scroll never stay stuck.
       document.addEventListener('pointercancel', handlePointerUp);
+      document.addEventListener('keydown', handleKeyDown);
     },
-    [handlePointerMove, handlePointerUp]
+    [handlePointerMove, handlePointerUp, handleKeyDown]
   );
 
   const didDrag = useCallback(() => didDragRef.current, []);
@@ -341,19 +379,12 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
   // otherwise they leak and keep firing setState on a dead component.
   useEffect(
     () => () => {
-      const drag = dragRef.current;
-      if (!drag) {
-        return;
+      if (dragRef.current) {
+        dragRef.current = null;
+        detach();
       }
-      dragRef.current = null;
-      document.removeEventListener('pointermove', handlePointerMove);
-      document.removeEventListener('pointerup', handlePointerUp);
-      document.removeEventListener('pointercancel', handlePointerUp);
-      stopAutoScroll();
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
     },
-    [handlePointerMove, handlePointerUp, stopAutoScroll]
+    [detach]
   );
 
   const nudge = useCallback((taskId: string, action: 'move' | 'resize', days: number) => {

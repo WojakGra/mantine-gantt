@@ -35,6 +35,22 @@ still snap to whole days. `weekStart` controls the header's week numbering and t
 
 <Demo data={demos.viewMode} />
 
+## Navigation, zoom and selection
+
+- `scrollTo` - `'today'`, a `Date`, or `{ taskId }` scrolls the timeline there on mount and whenever
+  the value changes (a task also brings its row into view).
+- Ctrl+wheel over the timeline zooms the day column between 8px and 200px around the cursor;
+  `onColumnWidthChange` reports the new width. Holding the middle mouse button autoscrolls the
+  timeline in the direction you move, on every platform.
+- `isNonWorkingDay` replaces the default Saturday/Sunday shading with your own predicate
+  (holidays, company calendar). It only affects the shading - durations stay in calendar days.
+- `selectedTaskId` marks a task's bar and list row with `data-selected`; pair it with
+  `onTaskClick` to build a selection.
+- While dragging, the bar shows its snapped start/end above the cursor (`showDragLabel={false}`
+  turns it off); Escape cancels the drag.
+
+<Demo data={demos.navigation} />
+
 ## Critical path & baselines
 
 `highlightCriticalPath` runs CPM over the dependency graph and paints the zero-slack tasks and

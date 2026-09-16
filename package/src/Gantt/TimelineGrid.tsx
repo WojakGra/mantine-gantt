@@ -2,6 +2,7 @@ import type { Dayjs } from 'dayjs';
 import React, { useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
 import type { GanttFactory } from './types';
+import { isWeekend } from './utils';
 
 interface TimelineGridProps {
   startDate: Dayjs;
@@ -12,6 +13,7 @@ interface TimelineGridProps {
   getStyles: GetStylesApi<GanttFactory>;
   viewMode: 'day' | 'week' | 'month';
   weekStart: 0 | 1;
+  isNonWorkingDay?: (date: Date) => boolean;
 }
 
 export function TimelineGrid({
@@ -23,6 +25,7 @@ export function TimelineGrid({
   getStyles,
   viewMode,
   weekStart,
+  isNonWorkingDay = isWeekend,
 }: TimelineGridProps) {
   // Generate day-based grid data (always needed for positioning)
   const dayGridData = useMemo(() => {
@@ -31,16 +34,13 @@ export function TimelineGrid({
     let x = 0;
 
     while (current.isBefore(endDate) || current.isSame(endDate, 'day')) {
-      const dayOfWeek = current.day();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-      columns.push({ x, isWeekend, date: current });
+      columns.push({ x, isWeekend: isNonWorkingDay(current.toDate()), date: current });
       current = current.add(1, 'day');
       x += columnWidth;
     }
 
     return columns;
-  }, [startDate, endDate, columnWidth]);
+  }, [startDate, endDate, columnWidth, isNonWorkingDay]);
 
   // Generate week separator positions
   const weekSeparators = useMemo(() => {
@@ -68,31 +68,9 @@ export function TimelineGrid({
 
   const totalHeight = rowCount * rowHeight;
 
-  // Get grid line positions based on viewMode
-  const gridLines = useMemo(() => {
-    switch (viewMode) {
-      case 'month':
-        return weekSeparators;
-      case 'week':
-        return weekSeparators;
-      case 'day':
-      default:
-        return dayGridData.map((col) => col.x);
-    }
-  }, [viewMode, dayGridData, weekSeparators]);
-
-  // Get major grid line positions (more prominent lines)
-  const majorGridLines = useMemo(() => {
-    switch (viewMode) {
-      case 'month':
-        return monthSeparators;
-      case 'week':
-        return monthSeparators;
-      case 'day':
-      default:
-        return weekSeparators;
-    }
-  }, [viewMode, monthSeparators, weekSeparators]);
+  // Day view: a line per day, weeks as major lines. Week/month view: weeks, months as major.
+  const gridLines = viewMode === 'day' ? dayGridData.map((col) => col.x) : weekSeparators;
+  const majorGridLines = viewMode === 'day' ? weekSeparators : monthSeparators;
 
   return (
     <div {...getStyles('timelineGrid', { style: { height: totalHeight } })}>

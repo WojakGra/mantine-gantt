@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`mantine-gantt` - a single-component npm library: an interactive Gantt chart for [Mantine](https://mantine.dev/). React 18/19, TypeScript, built on `@dnd-kit` for drag interactions and `dayjs` for dates. The published package lives in `package/`; `docs/` is a Next.js docs site. Yarn 4 (Berry) workspace, Node 24 (`.nvmrc`).
+`mantine-gantt` - a single-component npm library: an interactive Gantt chart for [Mantine](https://mantine.dev/). React 18/19, TypeScript, drag interactions on plain pointer events (no drag library), `dayjs` for dates. The published package lives in `package/`; `docs/` is a Next.js docs site. Yarn 4 (Berry) workspace, Node 24 (`.nvmrc`).
 
 The root `package.json` (`name: m-90d2bb8`) is **not** published - it only holds scripts and devDependencies. The published manifest is `package/package.json`. Bump versions there (or via the release scripts), never in the root.
 
@@ -28,11 +28,12 @@ All source is one component family under `package/src/Gantt/`. `package/src/inde
 
 **`Gantt.tsx` is the stateful orchestrator.** Everything else is a presentational child that receives a `getStyles` function and computed geometry. Key responsibilities living in `Gantt.tsx`:
 
-- **Internal task state.** `tasks` is held in `useState`, seeded from the `tasks` prop. Drag operations mutate this internal copy and fire `onTaskUpdate` / `onLinkCreate` callbacks - the component is uncontrolled with respect to task data.
-- **One `DndContext` for all interactions.** Drag intent is encoded in `active.data.current.type`: `'move'`, `'resize-start'`, `'resize-end'`, or `'link'`. `handleDragEnd` branches on this type. `'link'` creates a dependency (and returns early); the others recompute `startDate`/`duration` in days. `flushSync` wraps the task update + drag-state clear to commit in one render and avoid bar flicker.
+- **Task state.** `useUncontrolled` over `tasks` / `defaultTasks` / `onTasksChange` - controlled or uncontrolled like any Mantine input. Every change (drag, resize, link, keyboard nudge) commits a full new list and also fires `onTaskUpdate` / `onLinkCreate` / `onLinkDelete`.
+- **Drag lives in `use-gantt-drag.ts`.** One hook owns move / resize-start / resize-end / link on document pointer events, with edge auto-scroll and a 5px activation threshold. The live delta is continuous px; it snaps to whole days only on release (`commit`). `Gantt.tsx` only reads `drag.state` and passes geometry down.
+- **Row virtualization.** `buildTaskTree` flattens the parent/child tree into visible rows; `visibleRowRange` slices them by the timeline's `scrollTop`, and both panes render only that slice (task list pads with `offsetTop`, timeline rows are absolutely positioned).
 - **Grid snapping.** All horizontal deltas pass through `snapToGrid` (in `utils.ts`) against `effectiveColumnWidth`, then convert to whole-day deltas.
 - **`viewMode` derives `effectiveColumnWidth`** from the `columnWidth` prop: `day` = full width, `week` = ÷2 (min 14px), `month` = ÷6 (min 7px). **Always use `effectiveColumnWidth`, not the raw `columnWidth` prop, for any pixel/date math** - children receive the effective value as their `columnWidth`.
-- **Stable bounds during drag.** Timeline bounds are recomputed from tasks via `calculateTimelineBounds`, but frozen in `stableBoundsRef` while a drag is active so the timeline doesn't reflow under the cursor.
+- **Stable bounds during drag.** Bounds come from `calculateTimelineBounds`; while a move/resize is active only the END may grow (by a 30-day buffer) so the axis never reflows under the cursor. A `useLayoutEffect` counter-scrolls when the origin shifts on drag end.
 - **Scroll sync.** Manual scroll-handler wiring keeps the task list (vertical), timeline body, and timeline header (horizontal) aligned.
 
 **Children:** `TaskList` (left pane), `TimelineHeader` (date columns), `TimelineGrid` (background grid + rows), `TaskBar` (a draggable bar with move/resize/link handles), `DependencyLinks` (SVG dependency arrows, redrawn live during drag using `dragDelta`). `types.ts` defines `GanttTask`, props, and the Mantine `GanttFactory`. `utils.ts` holds all pure date↔pixel math and is the most heavily unit-tested file.
