@@ -510,8 +510,14 @@ describe('task list width', () => {
   });
 
   it('honours an explicit taskListWidth', () => {
+    const { container } = render(<Gantt tasks={mockTasks} taskListWidth={400} />);
+    expect(width(container)).toBe('400px');
+  });
+
+  it('clamps a taskListWidth narrower than the columns need', () => {
+    // Fixed columns alone are 260px; flexible Task Name keeps a 100px floor.
     const { container } = render(<Gantt tasks={mockTasks} taskListWidth={240} />);
-    expect(width(container)).toBe('240px');
+    expect(width(container)).toBe('360px');
   });
 });
 

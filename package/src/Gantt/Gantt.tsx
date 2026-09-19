@@ -39,9 +39,20 @@ const EMPTY_CRITICAL = new Set<string>();
 // Width given to a column that declares none, when the panel width is auto-sized.
 const FLEX_COLUMN_WIDTH = 200;
 
-/** Panel width when `taskListWidth` is omitted - wide enough that no column is crushed. */
-function autoTaskListWidth(columns: GanttColumn[] = defaultColumns) {
-  return columns.reduce((sum, col) => sum + (col.width ?? FLEX_COLUMN_WIDTH), 0);
+// Floor for a flexible column when an explicit `taskListWidth` would squeeze it.
+const FLEX_COLUMN_MIN_WIDTH = 100;
+
+/** Panel width the columns need, giving each flexible (width-less) column `flexWidth`. */
+function columnsWidth(columns: GanttColumn[] = defaultColumns, flexWidth: number) {
+  return columns.reduce((sum, col) => sum + (col.width ?? flexWidth), 0);
+}
+
+/** Auto-sized when `taskListWidth` is omitted; an explicit value is clamped so the fixed
+ *  columns never overflow the panel onto the timeline. */
+function resolveTaskListWidth(taskListWidth: number | undefined, columns?: GanttColumn[]) {
+  return taskListWidth === undefined
+    ? columnsWidth(columns, FLEX_COLUMN_WIDTH)
+    : Math.max(taskListWidth, columnsWidth(columns, FLEX_COLUMN_MIN_WIDTH));
 }
 
 const defaultProps: Partial<GanttProps> = {
@@ -64,7 +75,7 @@ const varsResolver = createVarsResolver<GanttFactory>(
       '--gantt-column-width': `${columnWidth}px`,
       '--gantt-row-height': `${rowHeight}px`,
       '--gantt-header-height': '50px',
-      '--gantt-task-list-width': `${taskListWidth ?? autoTaskListWidth(columns)}px`,
+      '--gantt-task-list-width': `${resolveTaskListWidth(taskListWidth, columns)}px`,
       '--gantt-critical-color': getThemeColor(criticalPathColor, theme),
     },
   })

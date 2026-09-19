@@ -156,7 +156,8 @@ export interface GanttBaseProps {
   /**
    * Width of the task list panel in pixels. Omitted: computed from `columns` - fixed columns
    * at their `width`, flexible ones at 200px (so the default set gives 460px). Set it only to
-   * override; a value narrower than the columns need squeezes the flexible column.
+   * override; a narrower value squeezes the flexible column down to 100px, below which the
+   * width is clamped so the columns never overflow the panel.
    */
   taskListWidth?: number;
 
