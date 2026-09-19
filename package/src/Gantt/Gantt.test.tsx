@@ -1048,9 +1048,30 @@ describe('typed dependencies', () => {
       <Gantt defaultTasks={tasks} onLinkDelete={onLinkDelete} onTasksChange={onTasksChange} />
     );
     fireEvent.click(container.querySelector('path[class*="dependencyLine"][data-hit]')!);
-    expect(onLinkDelete).toHaveBeenCalledWith('A', 'B');
+    expect(onLinkDelete).toHaveBeenCalledWith('A', 'B', 'SS');
     expect(onTasksChange.mock.calls[0][0][1].dependencies).toEqual([]);
     expect(container.querySelector(visibleLine)).toBeNull();
+  });
+
+  it('clicking one of two typed arrows between a pair removes only that type', () => {
+    const both: GanttTask[] = [
+      tasks[0],
+      {
+        ...tasks[1],
+        dependencies: [
+          { taskId: 'A', type: 'SS' },
+          { taskId: 'A', type: 'FF' },
+        ],
+      },
+    ];
+    const onLinkDelete = jest.fn();
+    const onTasksChange = jest.fn();
+    const { container } = render(
+      <Gantt defaultTasks={both} onLinkDelete={onLinkDelete} onTasksChange={onTasksChange} />
+    );
+    fireEvent.click(container.querySelectorAll('path[class*="dependencyLine"][data-hit]')[0]);
+    expect(onLinkDelete).toHaveBeenCalledWith('A', 'B', 'SS');
+    expect(onTasksChange.mock.calls[0][0][1].dependencies).toEqual([{ taskId: 'A', type: 'FF' }]);
   });
 
   it('dragging a link onto an already linked pair does not duplicate it', () => {

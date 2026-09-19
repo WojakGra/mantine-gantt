@@ -1,7 +1,13 @@
 import type { Dayjs } from 'dayjs';
 import React, { useId, useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
-import type { GanttDragType, GanttFactory, GanttTask, GanttTreeRow } from './types';
+import type {
+  GanttDependencyType,
+  GanttDragType,
+  GanttFactory,
+  GanttTask,
+  GanttTreeRow,
+} from './types';
 import { barAnchors, getEffectiveTask, normalizeDependency } from './utils';
 
 // Horizontal stub before/after an elbow, and the default elbow rounding radius.
@@ -26,8 +32,8 @@ interface DependencyLinksProps {
   /** Virtualized row range `[firstRow, lastRow)`; links entirely above or below it are skipped. */
   firstRow?: number;
   lastRow?: number;
-  /** Called with (fromTaskId, toTaskId) when a rendered dependency line is clicked. */
-  onLinkClick?: (fromTaskId: string, toTaskId: string) => void;
+  /** Called with (fromTaskId, toTaskId, type) when a rendered dependency line is clicked. */
+  onLinkClick?: (fromTaskId: string, toTaskId: string, type: GanttDependencyType) => void;
 }
 
 export function DependencyLinks({
@@ -64,6 +70,7 @@ export function DependencyLinks({
       key: string;
       fromId: string;
       toId: string;
+      type: GanttDependencyType;
       points: string;
       critical: boolean;
     }> = [];
@@ -132,6 +139,7 @@ export function DependencyLinks({
           key: `${fromId}~${toTask.id}~${type}`,
           fromId,
           toId: toTask.id,
+          type,
           // Path data ("M ... Q ..."), rendered into a <path d>.
           points,
           critical: (criticalIds?.has(fromId) && criticalIds?.has(toTask.id)) || false,
@@ -179,7 +187,7 @@ export function DependencyLinks({
       </defs>
 
       {links.map((link) => {
-        const { fromId, toId } = link;
+        const { fromId, toId, type } = link;
         return (
           <g key={link.key}>
             {/* Invisible fat stroke: the visible line is 1.5–2.5px, far too thin to click
@@ -192,7 +200,7 @@ export function DependencyLinks({
               data-hit
               d={link.points}
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={onLinkClick ? () => onLinkClick(fromId, toId) : undefined}
+              onClick={onLinkClick ? () => onLinkClick(fromId, toId, type) : undefined}
             />
             <path
               {...getStyles('dependencyLine')}

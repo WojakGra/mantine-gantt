@@ -342,7 +342,11 @@ export function shiftTask(
     return action === 'resize-end'
       ? { startDate: task.startDate, duration: Math.max(1, task.duration + days) }
       : // resize-start: shift start, keep the right edge (duration shrinks/grows by -days).
-        { startDate: format(start.add(days, 'day')), duration: Math.max(1, task.duration - days) };
+        // Like the working-day branch, the start can never pass the end.
+        {
+          startDate: format(start.add(Math.min(days, task.duration - 1), 'day')),
+          duration: Math.max(1, task.duration - days),
+        };
   }
 
   const end = getTaskEndDate(task.startDate, task.duration, isNonWorkingDay);

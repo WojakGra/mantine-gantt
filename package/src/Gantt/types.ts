@@ -175,8 +175,8 @@ export interface GanttBaseProps {
   /** Callback when a dependency link is created (fromTaskId, toTaskId) */
   onLinkCreate?: (fromTaskId: string, toTaskId: string) => void;
 
-  /** Callback when a dependency link is deleted by clicking it (fromTaskId, toTaskId) */
-  onLinkDelete?: (fromTaskId: string, toTaskId: string) => void;
+  /** Callback when a dependency link is deleted by clicking it (fromTaskId, toTaskId, type) */
+  onLinkDelete?: (fromTaskId: string, toTaskId: string, type: GanttDependencyType) => void;
 
   /**
    * Automatically shift dependent tasks (finish-to-start, zero lag) when a task is

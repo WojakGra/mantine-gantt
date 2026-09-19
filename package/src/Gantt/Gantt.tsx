@@ -16,7 +16,13 @@ import { TaskBar } from './TaskBar';
 import { defaultColumns, TaskList } from './TaskList';
 import { TimelineGrid } from './TimelineGrid';
 import { TimelineHeader } from './TimelineHeader';
-import type { GanttColumn, GanttFactory, GanttProps, GanttTask } from './types';
+import type {
+  GanttColumn,
+  GanttDependencyType,
+  GanttFactory,
+  GanttProps,
+  GanttTask,
+} from './types';
 import { useGanttDrag } from './use-gantt-drag';
 import {
   barAnchors,
@@ -245,7 +251,6 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     contentRef: timelineContentRef,
     onTaskUpdate,
     onLinkCreate,
-    onLinkDelete,
     autoSchedule,
     isNonWorkingDay: calendar,
     announce: setAnnouncement,
@@ -253,22 +258,24 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   const active = drag.state;
 
   // Clicking a rendered dependency line deletes the link: the target's `dependencies`
-  // loses the source id, mirroring how onLinkCreate adds it.
+  // loses the source id, mirroring how onLinkCreate adds it. Only the clicked type goes -
+  // a pair may be tied by several dependencies of different types.
   const handleLinkDelete = useCallback(
-    (fromTaskId: string, toTaskId: string) => {
+    (fromTaskId: string, toTaskId: string, type: GanttDependencyType) => {
       setTasks(
         tasks.map((task) =>
           task.id === toTaskId
             ? {
                 ...task,
-                dependencies: (task.dependencies ?? []).filter(
-                  (dep) => normalizeDependency(dep).taskId !== fromTaskId
-                ),
+                dependencies: (task.dependencies ?? []).filter((dep) => {
+                  const normalized = normalizeDependency(dep);
+                  return normalized.taskId !== fromTaskId || normalized.type !== type;
+                }),
               }
             : task
         )
       );
-      onLinkDelete?.(fromTaskId, toTaskId);
+      onLinkDelete?.(fromTaskId, toTaskId, type);
     },
     [tasks, setTasks, onLinkDelete]
   );

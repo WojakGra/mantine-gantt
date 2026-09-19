@@ -739,6 +739,10 @@ describe('shiftTask', () => {
     expect(shiftTask(task, 'resize-end', -9).duration).toBe(1);
   });
 
+  it('calendar resize-start past the end clamps to a one-day task on the end date', () => {
+    expect(shiftTask(task, 'resize-start', 10)).toEqual({ startDate: '2026-02-06', duration: 1 });
+  });
+
   it('a move snaps to a working day in the direction of travel', () => {
     const thu = { startDate: '2026-02-05', duration: 1 };
     expect(shiftTask(thu, 'move', 2, isWeekend).startDate).toBe('2026-02-09');

@@ -137,7 +137,7 @@ const endColumn: GanttColumn = {
 ## Deleting dependency links
 
 Click a dependency arrow to delete that link. The component removes the source id from the
-target's `dependencies` and fires `onLinkDelete(fromTaskId, toTaskId)` alongside `onTasksChange`,
+target's `dependencies` and fires `onLinkDelete(fromTaskId, toTaskId, type)` alongside `onTasksChange`,
 mirroring how link creation works.
 
 ## Markers

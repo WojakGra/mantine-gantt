@@ -217,7 +217,7 @@ The Gantt component supports Mantine's Styles API:
 
 ```tsx
 <Gantt
-  tasks={tasks}
+  defaultTasks={tasks}
   onTaskUpdate={(task) => console.log('Updated:', task)}
   onTaskClick={(task) => console.log('Clicked:', task)}
   onLinkCreate={(from, to) => console.log('Link:', from, '->', to)}

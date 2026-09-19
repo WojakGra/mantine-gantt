@@ -109,7 +109,6 @@ export function Interactive() {
   const handleTaskUpdate = (updatedTask: GanttTask) => {
     // eslint-disable-next-line no-console
     console.log('Task updated:', updatedTask);
-    setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
   };
 
   const handleTaskClick = (task: GanttTask) => {
@@ -126,6 +125,7 @@ export function Interactive() {
     <div style={{ padding: 20, height: 600 }}>
       <Gantt
         tasks={tasks}
+        onTasksChange={setTasks}
         onTaskUpdate={handleTaskUpdate}
         onTaskClick={handleTaskClick}
         onLinkCreate={handleLinkCreate}

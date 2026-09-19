@@ -45,7 +45,6 @@ export interface UseGanttDragOptions {
   contentRef: React.RefObject<HTMLDivElement | null>;
   onTaskUpdate?: (task: GanttTask) => void;
   onLinkCreate?: (fromTaskId: string, toTaskId: string) => void;
-  onLinkDelete?: (fromTaskId: string, toTaskId: string) => void;
   /** Cascade successors after a move/resize commit. */
   autoSchedule?: boolean;
   /** Working-day calendar; set only when the chart counts durations in working days. */
