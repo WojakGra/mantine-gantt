@@ -1,6 +1,6 @@
 import dayjs, { Dayjs } from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
-import type { GanttTask, GanttTreeRow } from './types';
+import type { GanttDependency, GanttTask, GanttTreeRow } from './types';
 
 dayjs.extend(isoWeek);
 
@@ -172,7 +172,8 @@ export function calculateTimelineBounds(
   tasks: GanttTask[],
   startDate?: Date,
   endDate?: Date,
-  padding = 7
+  padding = 7,
+  isNonWorkingDay?: IsNonWorkingDay
 ): { start: Dayjs; end: Dayjs } {
   // Task/baseline dates are bare "YYYY-MM-DD" strings, parsed by dayjs as local midnight.
   // A `Date` prop is expected to represent local midnight of the intended day (e.g. built
@@ -197,11 +198,11 @@ export function calculateTimelineBounds(
   }
 
   let earliest = dayjs(tasks[0].startDate);
-  let latest = getTaskEndDate(tasks[0].startDate, tasks[0].duration);
+  let latest = getTaskEndDate(tasks[0].startDate, tasks[0].duration, isNonWorkingDay);
 
   tasks.forEach((task) => {
     const taskStart = dayjs(task.startDate);
-    const taskEnd = getTaskEndDate(task.startDate, task.duration);
+    const taskEnd = getTaskEndDate(task.startDate, task.duration, isNonWorkingDay);
 
     if (taskStart.isBefore(earliest)) {
       earliest = taskStart;
@@ -213,7 +214,11 @@ export function calculateTimelineBounds(
 
     if (task.baseline) {
       const baseStart = dayjs(task.baseline.startDate);
-      const baseEnd = getTaskEndDate(task.baseline.startDate, task.baseline.duration);
+      const baseEnd = getTaskEndDate(
+        task.baseline.startDate,
+        task.baseline.duration,
+        isNonWorkingDay
+      );
       if (baseStart.isBefore(earliest)) {
         earliest = baseStart;
       }
@@ -237,11 +242,138 @@ export function formatTaskDate(date: string | Date | Dayjs, locale = 'en'): stri
 }
 
 /**
+ * Working-day calendar: returns true for days nobody works. Every function below takes it
+ * as an optional last argument - omitted means calendar-day mode, where every day counts.
+ */
+export type IsNonWorkingDay = (date: Date) => boolean;
+
+/** Nearest working day at or after (`step` 1) / at or before (`step` -1) `date`. */
+function snapToWorkingDay(date: Dayjs, step: 1 | -1, isNonWorkingDay: IsNonWorkingDay): Dayjs {
+  let d = date;
+  // ponytail: a calendar with no working day at all would loop forever; give up after a year.
+  for (let i = 0; i < 366 && isNonWorkingDay(d.toDate()); i++) {
+    d = d.add(step, 'day');
+  }
+  return d;
+}
+
+/**
+ * Shift a date by `days` working days (negative = backwards). The result is always a
+ * working day, so 0 days from a Saturday is the following Monday.
+ */
+export function addWorkingDays(
+  date: Dayjs,
+  days: number,
+  isNonWorkingDay?: IsNonWorkingDay
+): Dayjs {
+  if (!isNonWorkingDay) {
+    return date.add(days, 'day');
+  }
+  const step = days < 0 ? -1 : 1;
+  let d = snapToWorkingDay(date, step, isNonWorkingDay);
+  for (let left = Math.abs(days); left > 0; left--) {
+    d = snapToWorkingDay(d.add(step, 'day'), step, isNonWorkingDay);
+  }
+  return d;
+}
+
+/** Working days in `[start, end]`, both inclusive. */
+function countWorkingDays(start: Dayjs, end: Dayjs, isNonWorkingDay: IsNonWorkingDay): number {
+  let count = 0;
+  for (let d = start; !d.isAfter(end); d = d.add(1, 'day')) {
+    if (!isNonWorkingDay(d.toDate())) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
  * Calculate end date from start date and duration. Duration is inclusive of the start
  * day; a milestone (duration 0) starts and ends on the same day.
  */
-export function getTaskEndDate(startDate: string, duration: number): Dayjs {
-  return dayjs(startDate).add(Math.max(0, duration - 1), 'day');
+export function getTaskEndDate(
+  startDate: string,
+  duration: number,
+  isNonWorkingDay?: IsNonWorkingDay
+): Dayjs {
+  return addWorkingDays(dayjs(startDate), Math.max(0, duration - 1), isNonWorkingDay);
+}
+
+/**
+ * Calendar days a task's bar covers. Equals `duration` in calendar-day mode; with a
+ * working-day calendar it also includes the non-working days in between.
+ */
+export function getTaskSpan(
+  startDate: string,
+  duration: number,
+  isNonWorkingDay?: IsNonWorkingDay
+): number {
+  if (!isNonWorkingDay || duration <= 0) {
+    return duration;
+  }
+  return getTaskEndDate(startDate, duration, isNonWorkingDay).diff(dayjs(startDate), 'day') + 1;
+}
+
+/**
+ * New schedule after a move / resize by `days` CALENDAR days (what a pointer drag yields).
+ * The one place this math lives: the drag commit, the keyboard move and the live drag
+ * label all call it, so what the label shows is what gets committed.
+ */
+export function shiftTask(
+  task: Pick<GanttTask, 'startDate' | 'duration'>,
+  action: 'move' | 'resize-start' | 'resize-end',
+  days: number,
+  isNonWorkingDay?: IsNonWorkingDay
+): Pick<GanttTask, 'startDate' | 'duration'> {
+  const start = dayjs(task.startDate);
+  const format = (d: Dayjs) => d.format('YYYY-MM-DD');
+
+  if (action === 'move') {
+    const moved = start.add(days, 'day');
+    // Snap in the direction of travel, or a one-day nudge off a Monday would bounce back.
+    const snapped = isNonWorkingDay
+      ? snapToWorkingDay(moved, days < 0 ? -1 : 1, isNonWorkingDay)
+      : moved;
+    return { startDate: format(snapped), duration: task.duration };
+  }
+
+  if (!isNonWorkingDay) {
+    return action === 'resize-end'
+      ? { startDate: task.startDate, duration: Math.max(1, task.duration + days) }
+      : // resize-start: shift start, keep the right edge (duration shrinks/grows by -days).
+        { startDate: format(start.add(days, 'day')), duration: Math.max(1, task.duration - days) };
+  }
+
+  const end = getTaskEndDate(task.startDate, task.duration, isNonWorkingDay);
+  if (action === 'resize-end') {
+    const newEnd = end.add(days, 'day');
+    return {
+      startDate: task.startDate,
+      duration: Math.max(1, countWorkingDays(start, newEnd, isNonWorkingDay)),
+    };
+  }
+  // resize-start: the end is a working day, so snapping forward can never pass it.
+  const moved = start.add(days, 'day');
+  const newStart = snapToWorkingDay(moved.isAfter(end) ? end : moved, 1, isNonWorkingDay);
+  return {
+    startDate: format(newStart),
+    duration: Math.max(1, countWorkingDays(newStart, end, isNonWorkingDay)),
+  };
+}
+
+/** Expand the string shorthand (`'id'` = finish-to-start, no lag) into the full object. */
+export function normalizeDependency(
+  dependency: string | GanttDependency
+): Required<GanttDependency> {
+  return typeof dependency === 'string'
+    ? { taskId: dependency, type: 'FS', lag: 0 }
+    : { taskId: dependency.taskId, type: dependency.type ?? 'FS', lag: dependency.lag ?? 0 };
+}
+
+/** Ids of the tasks `task` depends on, whatever shape each dependency is written in. */
+function dependencyIds(task: GanttTask | undefined): string[] {
+  return (task?.dependencies ?? []).map((dep) => normalizeDependency(dep).taskId);
 }
 
 /**
@@ -265,7 +397,7 @@ export function wouldCreateCycle(tasks: GanttTask[], fromId: string, toId: strin
       continue;
     }
     visited.add(id);
-    stack.push(...(byId.get(id)?.dependencies ?? []));
+    stack.push(...dependencyIds(byId.get(id)));
   }
   return false;
 }
@@ -277,7 +409,11 @@ export function wouldCreateCycle(tasks: GanttTask[], fromId: string, toId: strin
  * root (same tolerance as unknown dependency ids in getCriticalPath). Rows inside
  * a collapsed subtree are omitted.
  */
-export function buildTaskTree(tasks: GanttTask[], collapsedIds: Set<string>): GanttTreeRow[] {
+export function buildTaskTree(
+  tasks: GanttTask[],
+  collapsedIds: Set<string>,
+  isNonWorkingDay?: IsNonWorkingDay
+): GanttTreeRow[] {
   const ids = new Set(tasks.map((t) => t.id));
 
   // Valid parent links; unknown/self links are dropped up front.
@@ -333,7 +469,7 @@ export function buildTaskTree(tasks: GanttTask[], collapsedIds: Set<string>): Ga
       const start = dayjs(task.startDate);
       env = {
         start,
-        end: start.add(task.duration, 'day'),
+        end: start.add(getTaskSpan(task.startDate, task.duration, isNonWorkingDay), 'day'),
         duration: task.duration,
         progress: task.progress,
       };
@@ -355,7 +491,10 @@ export function buildTaskTree(tasks: GanttTask[], collapsedIds: Set<string>): Ga
       env = {
         start,
         end,
-        duration: end.diff(start, 'day'),
+        // `end` is exclusive, hence the day subtracted for the inclusive count.
+        duration: isNonWorkingDay
+          ? countWorkingDays(start, end.subtract(1, 'day'), isNonWorkingDay)
+          : end.diff(start, 'day'),
         progress: total > 0 ? Math.round(weighted / total) : 0,
       };
     }
@@ -373,6 +512,7 @@ export function buildTaskTree(tasks: GanttTask[], collapsedIds: Set<string>): Ga
       hasChildren: children.length > 0,
       startDate: env.start.format('YYYY-MM-DD'),
       duration: env.duration,
+      span: env.end.diff(env.start, 'day'),
       progress: env.progress,
     });
     if (!collapsedIds.has(task.id)) {
@@ -392,9 +532,9 @@ export function getEffectiveTask(row: GanttTreeRow): GanttTask {
 }
 
 /**
- * Critical path (CPM) over the dependency graph. Every dependency is treated as
- * finish-to-start with zero lag; unit is days; startDate is ignored (durations +
- * graph only). Tasks with zero total slack are critical. Edges that would close a
+ * Critical path (CPM) over the dependency graph, honouring each dependency's type and
+ * lag; unit is days (working days when the chart counts those - the math is the same);
+ * startDate is ignored (durations + graph only). Tasks with zero total slack are critical. Edges that would close a
  * cycle are skipped, unknown dependency ids are ignored. Tasks with children
  * (summary parents) are excluded from the graph entirely.
  */
@@ -409,31 +549,45 @@ export function getCriticalPath(tasks: GanttTask[]): Set<string> {
   const byId = new Map(leafTasks.map((t) => [t.id, t]));
 
   // Reduce to a DAG once (unknown ids and cycle-closing edges dropped) and use the same
-  // graph for both passes, so earliest/latest finish stay consistent on cyclic input.
+  // typed edges for both passes, so earliest/latest finish stay consistent on cyclic input.
+  interface Edge extends Required<GanttDependency> {
+    to: string;
+  }
   const successors = buildSuccessorMap(leafTasks);
-  const dagDeps = new Map<string, string[]>(leafTasks.map((t) => [t.id, []]));
-  successors.forEach((succs, depId) => succs.forEach((id) => dagDeps.get(id)!.push(depId)));
+  const incoming = new Map<string, Edge[]>(leafTasks.map((t) => [t.id, []]));
+  const outgoing = new Map<string, Edge[]>(leafTasks.map((t) => [t.id, []]));
+  leafTasks.forEach((task) =>
+    (task.dependencies ?? []).forEach((raw) => {
+      const edge = { ...normalizeDependency(raw), to: task.id };
+      if (successors.get(edge.taskId)?.includes(task.id)) {
+        incoming.get(task.id)!.push(edge);
+        outgoing.get(edge.taskId)!.push(edge);
+      }
+    })
+  );
+  const duration = (id: string) => byId.get(id)!.duration;
 
-  // Forward pass: earliest finish, memoized DFS over the DAG.
-  const earliestFinish = new Map<string, number>();
-  const getEF = (id: string): number => {
-    const cached = earliestFinish.get(id);
+  // Forward pass: earliest start, memoized DFS over the DAG. The first letter of the type
+  // picks the predecessor's end of the constraint, the second letter the successor's.
+  const earliestStart = new Map<string, number>();
+  const getES = (id: string): number => {
+    const cached = earliestStart.get(id);
     if (cached !== undefined) {
       return cached;
     }
     let es = 0;
-    for (const depId of dagDeps.get(id)!) {
-      es = Math.max(es, getEF(depId));
+    for (const edge of incoming.get(id)!) {
+      const from = getES(edge.taskId) + (edge.type[0] === 'F' ? duration(edge.taskId) : 0);
+      es = Math.max(es, from + edge.lag - (edge.type[1] === 'F' ? duration(id) : 0));
     }
-    const ef = es + byId.get(id)!.duration;
-    earliestFinish.set(id, ef);
-    return ef;
+    earliestStart.set(id, es);
+    return es;
   };
-  leafTasks.forEach((t) => getEF(t.id));
+  const earliestFinish = new Map(leafTasks.map((t) => [t.id, getES(t.id) + t.duration]));
 
   const projectEnd = leafTasks.length === 0 ? 0 : Math.max(...earliestFinish.values());
 
-  // Backward pass: latest finish over the successor graph (reverse of the same DAG).
+  // Backward pass: latest finish over the same edges, reversed.
   const latestFinish = new Map<string, number>();
   const getLF = (id: string): number => {
     const cached = latestFinish.get(id);
@@ -441,8 +595,9 @@ export function getCriticalPath(tasks: GanttTask[]): Set<string> {
       return cached;
     }
     let lf = projectEnd;
-    for (const succId of successors.get(id) ?? []) {
-      lf = Math.min(lf, getLF(succId) - byId.get(succId)!.duration);
+    for (const edge of outgoing.get(id)!) {
+      const to = getLF(edge.to) - (edge.type[1] === 'S' ? duration(edge.to) : 0);
+      lf = Math.min(lf, to - edge.lag + (edge.type[0] === 'S' ? duration(id) : 0));
     }
     latestFinish.set(id, lf);
     return lf;
@@ -469,7 +624,7 @@ export function buildSuccessorMap(tasks: GanttTask[]): Map<string, string[]> {
 
   // ponytail: wouldCreateCycle rebuilds its id map per edge (O(edges * tasks)); share the map if it ever shows up hot.
   tasks.forEach((task) => {
-    (task.dependencies ?? []).forEach((depId) => {
+    dependencyIds(task).forEach((depId) => {
       // Edge depId → task.id closes a cycle when depId already depends on task.id.
       if (!ids.has(depId) || wouldCreateCycle(tasks, depId, task.id)) {
         return;
@@ -482,13 +637,18 @@ export function buildSuccessorMap(tasks: GanttTask[]): Map<string, string[]> {
 
 /**
  * Auto-scheduling cascade: after `movedTaskId` moved/resized, push every transitive
- * finish-to-start successor so it never starts before its predecessors end. Only leaves
+ * successor later until its dependencies (any type, with lag) hold again. Never pulls a
+ * task earlier. Only leaves
  * are cascaded - summary parents derive their schedule from children. Returns the input
  * array unchanged when nothing needs to move. Assumes an acyclic dependency graph
  * (guaranteed upstream by wouldCreateCycle); tolerates cyclic input without hanging by
  * cascading only the DAG-reachable, topologically ordered part.
  */
-export function applyAutoSchedule(tasks: GanttTask[], movedTaskId: string): GanttTask[] {
+export function applyAutoSchedule(
+  tasks: GanttTask[],
+  movedTaskId: string,
+  isNonWorkingDay?: IsNonWorkingDay
+): GanttTask[] {
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const successors = buildSuccessorMap(tasks);
   const next = new Map(byId);
@@ -517,16 +677,28 @@ export function applyAutoSchedule(tasks: GanttTask[], movedTaskId: string): Gant
     if (!task) {
       continue;
     }
-    // Earliest allowed start: the day after the latest predecessor's end.
+    // Earliest allowed start: the latest of what each dependency demands.
     let earliestStart: Dayjs | null = null;
-    for (const depId of task.dependencies ?? []) {
-      const dep = next.get(depId);
+    for (const raw of task.dependencies ?? []) {
+      const { taskId, type, lag } = normalizeDependency(raw);
+      const dep = next.get(taskId);
       if (!dep) {
         continue;
       }
-      const depEnd = getTaskEndDate(dep.startDate, dep.duration).add(1, 'day');
-      if (!earliestStart || depEnd.isAfter(earliestStart)) {
-        earliestStart = depEnd;
+      // Days are inclusive, so "after the finish" is end + 1 and "before the start" is
+      // start - 1: FS start >= end + 1, SS start >= start, FF end >= end, SF end >= start - 1.
+      const from =
+        type[0] === 'F'
+          ? getTaskEndDate(dep.startDate, dep.duration, isNonWorkingDay)
+          : dayjs(dep.startDate);
+      const offset = lag + (type === 'FS' ? 1 : 0) - (type === 'SF' ? 1 : 0);
+      let minStart = addWorkingDays(from, offset, isNonWorkingDay);
+      if (type[1] === 'F') {
+        // The constraint is on the end: walk back by the task's own length.
+        minStart = addWorkingDays(minStart, -Math.max(0, task.duration - 1), isNonWorkingDay);
+      }
+      if (!earliestStart || minStart.isAfter(earliestStart)) {
+        earliestStart = minStart;
       }
     }
     if (!earliestStart) {

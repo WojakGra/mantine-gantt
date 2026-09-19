@@ -1,14 +1,17 @@
+import dayjs from 'dayjs';
 import React from 'react';
 import type { GetStylesApi } from '@mantine/core';
 import type { GanttColumn, GanttFactory, GanttTreeRow } from './types';
-import { formatTaskDate, getEffectiveTask, getTaskEndDate } from './utils';
+import { formatTaskDate, getEffectiveTask } from './utils';
 
 export const defaultColumns: GanttColumn[] = [
   { header: 'Task Name', render: (t) => t.label },
   { header: 'Start', render: (t, locale) => formatTaskDate(t.startDate, locale), width: 90 },
   {
     header: 'End',
-    render: (t, locale) => formatTaskDate(getTaskEndDate(t.startDate, t.duration), locale),
+    // `span` is the calendar length of the bar, so this holds with `workingDays` too.
+    render: (t, locale, row) =>
+      formatTaskDate(dayjs(t.startDate).add(Math.max(0, row.span - 1), 'day'), locale),
     width: 90,
   },
   { header: 'Duration', render: (t) => `${t.duration}d`, width: 80 },
@@ -77,7 +80,7 @@ export function TaskList({
                 style={{ gridTemplateColumns }}
               >
                 {columns.map((col, i) => {
-                  const content = col.render(task, locale);
+                  const content = col.render(task, locale, row);
                   const indent =
                     i === 0 && row.depth > 0
                       ? {

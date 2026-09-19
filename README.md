@@ -10,6 +10,8 @@ A fully-featured Gantt chart component for [Mantine](https://mantine.dev/). Buil
 
 - 📊 **Interactive Timeline** - Drag tasks to reschedule, resize to change duration
 - 🔗 **Dependency Links** - Visual dependency arrows between tasks with interactive creation
+- 🧭 **Dependency types and lag** - FS, SS, FF and SF links with lag or lead, honoured by auto-scheduling and the critical path
+- 📅 **Working days** - Optionally count durations in working days, skipping weekends and holidays
 - 🎨 **Mantine Integration** - Full support for Mantine's styling API, themes, and CSS variables
 - 📱 **Responsive** - Works across different screen sizes with customizable column widths
 - ♿ **Accessible** - Keyboard navigation and ARIA attributes for screen readers
@@ -78,6 +80,36 @@ const [tasks, setTasks] = useState(initialTasks);
 <Gantt tasks={tasks} onTasksChange={setTasks} />;
 ```
 
+## Breaking changes
+
+### Since 0.5.x
+
+**`GanttTask.dependencies` is now `(string | GanttDependency)[]`.** Your data does not change: a
+plain id still means a finish-to-start link with no lag. What breaks is TypeScript code that
+_reads_ the array as `string[]` (`deps.includes(id)`, passing it to a `string[]` parameter).
+Normalize it first:
+
+```diff
+-const ids = task.dependencies ?? [];
++import { normalizeDependency } from 'mantine-gantt';
++const ids = (task.dependencies ?? []).map((dep) => normalizeDependency(dep).taskId);
+```
+
+If you store tasks that users edit in the chart, expect objects in `dependencies` only when you
+put them there yourself - dragging a link still writes a plain id.
+
+**The today line is painted by `.todayLine::after`.** The line now runs behind the task bars
+while its dot stays on top, which needed the background to move to a pseudo-element. A
+`background-color` override on the `todayLine` selector no longer recolors the line:
+
+```diff
+-.myTodayLine { background-color: blue; }
++.myTodayLine::after, .myTodayLine::before { background-color: blue; }
+```
+
+Not breaking: `workingDays` is off by default, and the third `row` argument of
+`GanttColumn.render` is optional to use.
+
 ## Migrating from 0.2.x
 
 `tasks` used to be an initial value that the component copied into internal state; it is now the
@@ -109,6 +141,9 @@ otherwise the bars will not move.
 | `onTaskUpdate`  | `(task) => void`     | -       | Callback when a task is updated                                              |
 | `onTaskClick`   | `(task) => void`     | -       | Callback when a task is clicked                                              |
 | `onLinkCreate`  | `(from, to) => void` | -       | Callback when a dependency is created                                        |
+| `workingDays`   | `boolean`            | `false` | Count `duration` and `lag` in working days (see `isNonWorkingDay`)           |
+| `readOnly`      | `boolean`            | `false` | Disable drag, resize, linking, link deletion and keyboard nudges             |
+| `markers`       | `GanttMarker[]`      | -       | Extra vertical date lines: `{ date, label?, color? }`                        |
 
 ## Task Object
 
@@ -117,10 +152,17 @@ interface GanttTask {
   id: string;
   label: string;
   startDate: string; // ISO date string
-  duration: number; // Days
+  duration: number; // Days - working days with the `workingDays` prop
   progress: number; // 0-100
-  dependencies?: string[]; // IDs of dependent tasks
+  dependencies?: (string | GanttDependency)[]; // 'id' = finish-to-start, no lag
   color?: MantineColor;
+  locked?: boolean; // no drag, resize or keyboard nudge
+}
+
+interface GanttDependency {
+  taskId: string;
+  type?: 'FS' | 'SS' | 'FF' | 'SF'; // default 'FS'
+  lag?: number; // days, negative = lead
 }
 ```
 
@@ -175,7 +217,7 @@ The Gantt component supports Mantine's Styles API:
 
 ```tsx
 <Gantt
-  defaultTasks={tasks}
+  tasks={tasks}
   onTaskUpdate={(task) => console.log('Updated:', task)}
   onTaskClick={(task) => console.log('Clicked:', task)}
   onLinkCreate={(from, to) => console.log('Link:', from, '->', to)}

@@ -80,6 +80,60 @@ and keyboard nudges alike. Turned off by default.
 
 <Demo data={demos.autoSchedule} />
 
+## Dependency types and lag
+
+An entry in `dependencies` is either a task id or an object. The id is shorthand for a
+finish-to-start link with no lag, so existing data keeps working.
+
+```tsx
+dependencies: [
+  '1', // finish-to-start, no lag
+  { taskId: '2', type: 'SS', lag: 2 }, // start 2 days after task 2 starts
+  { taskId: '3', type: 'FF', lag: -1 }, // finish 1 day before task 3 finishes
+];
+```
+
+`type` is `'FS'` (default), `'SS'`, `'FF'` or `'SF'` - predecessor first, `S` for start and `F`
+for finish. `lag` is whole days, negative for a lead. The arrow attaches to the ends the type
+names, `autoSchedule` enforces the constraint and the critical path accounts for it.
+
+Dragging the link connector always creates a finish-to-start link; set other types and lags in
+your data. Code that reads `dependencies` can normalize both shapes with `normalizeDependency`:
+
+```tsx
+import { normalizeDependency } from 'mantine-gantt';
+
+const ids = (task.dependencies ?? []).map(
+  (dep) => normalizeDependency(dep).taskId
+);
+```
+
+## Working days
+
+By default `duration` counts calendar days and `isNonWorkingDay` only shades columns. With
+`workingDays`, `duration`, `baseline.duration` and dependency `lag` count working days: a 5-day
+task that starts on Friday ends the next Thursday and its bar stretches across the weekend.
+
+- A task dropped on a non-working day snaps to the next working day in the direction it moved.
+- Resizing recounts the working days between the bar's new ends.
+- `autoSchedule` places successors on working days.
+- `isNonWorkingDay` defines the calendar, so holidays work the same way as weekends.
+
+A custom column gets the computed row as a third argument; `row.span` is the number of calendar
+days the bar covers, which is what you need to print an end date:
+
+```tsx
+const endColumn: GanttColumn = {
+  header: 'End',
+  render: (task, locale, row) =>
+    dayjs(task.startDate)
+      .add(Math.max(0, row.span - 1), 'day')
+      .format('YYYY-MM-DD'),
+};
+```
+
+<Demo data={demos.workingDays} />
+
 ## Deleting dependency links
 
 Click a dependency arrow to delete that link. The component removes the source id from the

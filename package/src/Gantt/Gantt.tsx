@@ -26,6 +26,9 @@ import {
   durationToPixels,
   getCriticalPath,
   getEffectiveTask,
+  getTaskSpan,
+  isWeekend,
+  normalizeDependency,
   visibleRowRange,
 } from './utils';
 import classes from './Gantt.module.css';
@@ -123,6 +126,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     selectedTaskId,
     markers,
     readOnly,
+    workingDays,
     onColumnWidthChange,
     showDragLabel,
     ...others
@@ -162,6 +166,9 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
         return Math.max(baseColumnWidth, 1);
     }
   }, [viewMode, baseColumnWidth]);
+
+  // Working-day calendar for all schedule math; undefined = durations are calendar days.
+  const calendar = workingDays ? (isNonWorkingDay ?? isWeekend) : undefined;
 
   // Controlled (`tasks` + `onTasksChange`) or uncontrolled (`defaultTasks`) - in controlled
   // mode nothing is stored here, every change goes out through onTasksChange.
@@ -205,7 +212,10 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
   // Visible rows in render order; parents carry their computed envelope schedule.
   // Recomputed only when tasks settle (drag commits) or collapse toggles.
-  const rows = useMemo(() => buildTaskTree(tasks, collapsedIds), [tasks, collapsedIds]);
+  const rows = useMemo(
+    () => buildTaskTree(tasks, collapsedIds, calendar),
+    [tasks, collapsedIds, calendar]
+  );
 
   // Critical path (CPM over dependencies) - only recomputed when tasks settle (drag commits),
   // not live during drag.
@@ -237,6 +247,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     onLinkCreate,
     onLinkDelete,
     autoSchedule,
+    isNonWorkingDay: calendar,
     announce: setAnnouncement,
   });
   const active = drag.state;
@@ -248,7 +259,12 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
       setTasks(
         tasks.map((task) =>
           task.id === toTaskId
-            ? { ...task, dependencies: (task.dependencies ?? []).filter((id) => id !== fromTaskId) }
+            ? {
+                ...task,
+                dependencies: (task.dependencies ?? []).filter(
+                  (dep) => normalizeDependency(dep).taskId !== fromTaskId
+                ),
+              }
             : task
         )
       );
@@ -259,8 +275,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
 
   // Calculate timeline bounds
   const calculatedBounds = useMemo(
-    () => calculateTimelineBounds(tasks, startDate, endDate),
-    [tasks, startDate, endDate]
+    () => calculateTimelineBounds(tasks, startDate, endDate, undefined, calendar),
+    [tasks, startDate, endDate, calendar]
   );
 
   // Freeze bounds while dragging so the axis doesn't reflow under the cursor. The origin
@@ -277,13 +293,16 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
       return calculatedBounds;
     }
     const startDay = dayjs(task.startDate).diff(calculatedBounds.start, 'day');
-    const barEndDay = startDay + task.duration + Math.round(active.deltaX / effectiveColumnWidth);
+    const barEndDay =
+      startDay +
+      getTaskSpan(task.startDate, task.duration, calendar) +
+      Math.round(active.deltaX / effectiveColumnWidth);
     const needed = calculatedBounds.start.add(barEndDay + DRAG_BUFFER_DAYS, 'day');
     if (!needed.isAfter(calculatedBounds.end)) {
       return calculatedBounds;
     }
     return { start: calculatedBounds.start, end: needed };
-  }, [calculatedBounds, active, tasks, effectiveColumnWidth]);
+  }, [calculatedBounds, active, tasks, effectiveColumnWidth, calendar]);
 
   // Calculate total timeline width, extended to at least fill the visible viewport so
   // there is no empty area to the right of the last column.
@@ -535,7 +554,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     if (srcIndex === -1) {
       return null;
     }
-    const src = getEffectiveTask(rows[srcIndex]);
+    // Anchor on the drawn bar: its calendar span, not its duration.
+    const src = { ...getEffectiveTask(rows[srcIndex]), duration: rows[srcIndex].span };
     const x1 = barAnchors(src, bounds.start, effectiveColumnWidth, rowHeight).right;
     const y1 = srcIndex * rowHeight + rowHeight / 2;
     return { x1, y1, x2: active.linkCursor.x, y2: active.linkCursor.y };
@@ -650,6 +670,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                     startDate={bounds.start}
                     columnWidth={effectiveColumnWidth}
                     getStyles={getStyles}
+                    span={row.span}
+                    isNonWorkingDay={calendar}
                     isSummary={row.hasChildren}
                     isLocked={readOnly || task.locked}
                     isDragging={active?.taskId === task.id && active.type !== 'link'}
@@ -677,7 +699,10 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                           bounds.start,
                           effectiveColumnWidth
                         ),
-                        width: durationToPixels(task.baseline.duration, effectiveColumnWidth),
+                        width: durationToPixels(
+                          getTaskSpan(task.baseline.startDate, task.baseline.duration, calendar),
+                          effectiveColumnWidth
+                        ),
                       }}
                     />
                   )}

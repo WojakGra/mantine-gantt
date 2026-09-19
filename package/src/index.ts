@@ -5,6 +5,9 @@ export type {
   GanttTask,
   GanttColumn,
   GanttMarker,
+  GanttDependency,
+  GanttDependencyType,
+  GanttTreeRow,
   GanttStylesNames,
   GanttFactory,
   GanttCssVariables,
@@ -22,4 +25,7 @@ export {
   wouldCreateCycle,
   buildSuccessorMap,
   applyAutoSchedule,
+  normalizeDependency,
+  addWorkingDays,
+  getTaskSpan,
 } from './Gantt';

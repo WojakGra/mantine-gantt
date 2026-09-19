@@ -788,6 +788,45 @@ export function MarkersAndLocks() {
   );
 }
 
+export function WorkingDaysAndTypedLinks() {
+  // February 2026: the 6th is a Friday.
+  const typed: GanttTask[] = [
+    { id: '1', label: 'Backend', startDate: '2026-02-02', duration: 5, progress: 60 },
+    {
+      id: '2',
+      label: 'Frontend (SS +2)',
+      startDate: '2026-02-04',
+      duration: 5,
+      progress: 30,
+      color: 'teal',
+      dependencies: [{ taskId: '1', type: 'SS', lag: 2 }],
+    },
+    {
+      id: '3',
+      label: 'Docs (FF)',
+      startDate: '2026-02-09',
+      duration: 2,
+      progress: 0,
+      color: 'grape',
+      dependencies: [{ taskId: '2', type: 'FF' }],
+    },
+    {
+      id: '4',
+      label: 'Release (FS)',
+      startDate: '2026-02-12',
+      duration: 1,
+      progress: 0,
+      color: 'red',
+      dependencies: ['2'],
+    },
+  ];
+  return (
+    <div style={{ padding: 20, height: 400 }}>
+      <Gantt defaultTasks={typed} workingDays autoSchedule highlightCriticalPath />
+    </div>
+  );
+}
+
 export function AutoSchedule() {
   const chainTasks: GanttTask[] = [
     { id: '1', label: 'Foundation', startDate: '2026-05-04', duration: 5, progress: 100 },

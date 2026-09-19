@@ -1,4 +1,4 @@
-import dayjs, { type Dayjs } from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import React from 'react';
 import { getThemeColor, Tooltip, useMantineTheme, type GetStylesApi } from '@mantine/core';
 import type { GanttDragType, GanttFactory, GanttTask } from './types';
@@ -7,7 +7,9 @@ import {
   durationToPixels,
   formatTaskDate as formatDate,
   getTaskEndDate,
+  shiftTask,
   snapToGrid,
+  type IsNonWorkingDay,
 } from './utils';
 
 interface TaskBarProps {
@@ -19,6 +21,10 @@ interface TaskBarProps {
   /** True when this bar is the current link drop target (highlight it). */
   isLinkTarget?: boolean;
   isSelected?: boolean;
+  /** Calendar days the bar covers (`GanttTreeRow.span`); differs from `duration` with `workingDays`. */
+  span: number;
+  /** Working-day calendar; set only when the chart counts durations in working days. */
+  isNonWorkingDay?: IsNonWorkingDay;
   /** True when this task is on the critical path. */
   isCritical?: boolean;
   /** True when this task has children and renders as a non-interactive summary bar. */
@@ -45,6 +51,8 @@ function TaskBarComponent({
   startDate,
   columnWidth,
   getStyles,
+  span,
+  isNonWorkingDay,
   isDragging,
   isLinkTarget,
   isCritical,
@@ -69,7 +77,7 @@ function TaskBarComponent({
   const inert = isSummary || isLocked;
   // Milestones are zero-length markers rendered as a fixed-size diamond.
   const baseLeft = dateToPixel(task.startDate, startDate, columnWidth);
-  const baseWidth = isMilestone ? columnWidth : durationToPixels(task.duration, columnWidth);
+  const baseWidth = isMilestone ? columnWidth : durationToPixels(span, columnWidth);
 
   const barColor = task.color
     ? getThemeColor(task.color, theme)
@@ -94,25 +102,23 @@ function TaskBarComponent({
   let dragLabel: string | null = null;
   if (showDragLabel && dragType && dragType !== 'link' && dragDeltaX !== 0) {
     const days = Math.round(snapToGrid(dragDeltaX, columnWidth) / columnWidth);
-    const start = dayjs(task.startDate);
+    const next = shiftTask(task, dragType, days, isNonWorkingDay);
+    const end = formatTaskDate(getTaskEndDate(next.startDate, next.duration, isNonWorkingDay));
     if (dragType === 'move') {
-      const s = start.add(days, 'day');
       dragLabel = isMilestone
-        ? formatTaskDate(s)
-        : `${formatTaskDate(s)} → ${formatTaskDate(getTaskEndDate(s.format('YYYY-MM-DD'), task.duration))}`;
+        ? formatTaskDate(next.startDate)
+        : `${formatTaskDate(next.startDate)} → ${end}`;
     } else if (dragType === 'resize-end') {
-      const d = Math.max(1, task.duration + days);
-      dragLabel = `${formatTaskDate(getTaskEndDate(task.startDate, d))} (${d}d)`;
+      dragLabel = `${end} (${next.duration}d)`;
     } else {
-      const d = Math.max(1, task.duration - days);
-      dragLabel = `${formatTaskDate(start.add(task.duration - d, 'day'))} (${d}d)`;
+      dragLabel = `${formatTaskDate(next.startDate)} (${next.duration}d)`;
     }
   }
 
   const tooltipLabel = isMilestone
     ? `${task.label} - ${formatTaskDate(task.startDate)}`
     : `${task.label} - ${formatTaskDate(task.startDate)} → ${formatTaskDate(
-        getTaskEndDate(task.startDate, task.duration)
+        getTaskEndDate(task.startDate, task.duration, isNonWorkingDay)
       )}${task.progress > 0 ? ` (${task.progress}%)` : ''}`;
 
   const bar = (
@@ -240,6 +246,8 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.task.color === nextProps.task.color &&
     prevProps.task.type === nextProps.task.type &&
     prevProps.columnWidth === nextProps.columnWidth &&
+    prevProps.span === nextProps.span &&
+    prevProps.isNonWorkingDay === nextProps.isNonWorkingDay &&
     prevProps.isDragging === nextProps.isDragging &&
     prevProps.isLinkTarget === nextProps.isLinkTarget &&
     prevProps.isCritical === nextProps.isCritical &&

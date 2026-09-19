@@ -5,10 +5,32 @@ import type { BoxProps, ElementProps, Factory, MantineColor, StylesApiProps } fr
 export interface GanttColumn {
   /** Header label */
   header: ReactNode;
-  /** Cell content for a given task; `locale` is the chart's `locale` prop */
-  render: (task: GanttTask, locale: string) => ReactNode;
+  /**
+   * Cell content for a given task; `locale` is the chart's `locale` prop, `row` carries the
+   * computed schedule (e.g. `row.span`, the calendar days the bar covers)
+   */
+  render: (task: GanttTask, locale: string, row: GanttTreeRow) => ReactNode;
   /** Fixed column width in px; omit to flex (1fr, 200px when the panel width is auto-sized) */
   width?: number;
+}
+
+/**
+ * Which ends a dependency ties together, predecessor first: finish-to-start (default),
+ * start-to-start, finish-to-finish, start-to-finish.
+ */
+export type GanttDependencyType = 'FS' | 'SS' | 'FF' | 'SF';
+
+/** A dependency on another task, with an optional type and lag */
+export interface GanttDependency {
+  /** Id of the predecessor task */
+  taskId: string;
+  /** Default `'FS'` */
+  type?: GanttDependencyType;
+  /**
+   * Gap in whole days, negative for a lead (overlap). Counts working days when the chart
+   * has `workingDays` on. Default `0`.
+   */
+  lag?: number;
 }
 
 /** A vertical line marking a date on the timeline (deadline, release, sprint end) */
@@ -29,7 +51,7 @@ export interface GanttTask {
   label: string;
   /** Start date in ISO format (YYYY-MM-DD) */
   startDate: string;
-  /** Duration in days */
+  /** Duration in days - working days when the chart has `workingDays` on */
   duration: number;
   /** Progress percentage (0-100) */
   progress: number;
@@ -39,8 +61,11 @@ export interface GanttTask {
    * duration is ignored for rendering) but can be moved and linked like tasks.
    */
   type?: 'task' | 'milestone';
-  /** IDs of tasks this task depends on */
-  dependencies?: string[];
+  /**
+   * Tasks this task depends on. A plain id is shorthand for a finish-to-start dependency
+   * with no lag; use a `GanttDependency` object for another type or a lag.
+   */
+  dependencies?: (string | GanttDependency)[];
   /** Custom color for the task bar */
   color?: MantineColor;
   /** Id of the parent task; a task that has children renders as a summary bar */
@@ -67,8 +92,10 @@ export interface GanttTreeRow {
   hasChildren: boolean;
   /** Effective start (YYYY-MM-DD): own for leaves, subtree envelope for parents */
   startDate: string;
-  /** Effective duration in days: own for leaves, envelope span for parents */
+  /** Effective duration in days: own for leaves, envelope length for parents */
   duration: number;
+  /** Calendar days the bar covers; differs from `duration` only with `workingDays` */
+  span: number;
   /** Effective progress: own for leaves, duration-weighted child average for parents */
   progress: number;
 }
@@ -258,6 +285,14 @@ export interface GanttBaseProps {
    * <br>Default: `Saturday and Sunday`
    */
   isNonWorkingDay?: (date: Date) => boolean;
+
+  /**
+   * Count `duration`, `baseline.duration` and dependency `lag` in working days, as defined
+   * by `isNonWorkingDay`: a 5-day task started on Friday ends the next Thursday, moved
+   * tasks snap off non-working days, and `autoSchedule` skips them.
+   * <br>Default: `false`
+   */
+  workingDays?: boolean;
 
   /**
    * Show the snapped start/end readout above a bar while it is dragged

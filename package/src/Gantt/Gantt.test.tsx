@@ -982,3 +982,89 @@ describe('markers', () => {
     expect(container.querySelector('[class*="mantine-Gantt-marker"]')).toBeNull();
   });
 });
+
+// February 2026: Sun 1, Mon 2 ... Fri 6, Sat 7, Sun 8, Mon 9 ... Thu 12.
+describe('workingDays', () => {
+  const friday: GanttTask[] = [
+    { id: '1', label: 'Task', startDate: '2026-02-06', duration: 5, progress: 0 },
+  ];
+
+  it('stretches the bar over the weekend and shows the real end date', () => {
+    const { container } = render(<Gantt tasks={friday} columnWidth={40} workingDays />);
+    expect(container.querySelector('[data-task-id="1"]')).toHaveStyle({ width: '280px' });
+    expect(screen.getByText('Feb 12, 2026')).toBeInTheDocument();
+  });
+
+  it('is off by default: duration stays calendar days', () => {
+    const { container } = render(<Gantt tasks={friday} columnWidth={40} />);
+    expect(container.querySelector('[data-task-id="1"]')).toHaveStyle({ width: '200px' });
+    expect(screen.getByText('Feb 10, 2026')).toBeInTheDocument();
+  });
+
+  it('a drag dropped on a weekend snaps forward to Monday', () => {
+    const onTaskUpdate = jest.fn();
+    const tasks: GanttTask[] = [
+      { id: '1', label: 'Task', startDate: '2026-02-05', duration: 1, progress: 0 },
+    ];
+    const { container } = render(
+      <Gantt defaultTasks={tasks} onTaskUpdate={onTaskUpdate} columnWidth={40} workingDays />
+    );
+    const bar = container.querySelector('[data-task-id="1"]')!;
+    pointer(bar, 'pointerdown', 100);
+    pointer(document, 'pointermove', 180);
+    pointer(document, 'pointerup', 180);
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ startDate: '2026-02-09', duration: 1 })
+    );
+  });
+});
+
+describe('typed dependencies', () => {
+  const tasks: GanttTask[] = [
+    { id: 'A', label: 'A', startDate: '2026-02-02', duration: 5, progress: 0 },
+    {
+      id: 'B',
+      label: 'B',
+      startDate: '2026-02-04',
+      duration: 3,
+      progress: 0,
+      dependencies: [{ taskId: 'A', type: 'SS' }],
+    },
+  ];
+  const visibleLine = 'path[class*="dependencyLine"]:not([data-hit])';
+
+  it('an SS arrow leaves from the start of the predecessor', () => {
+    const { container } = render(
+      <Gantt tasks={tasks} startDate={new Date(2026, 0, 25)} columnWidth={40} />
+    );
+    // A starts 8 days after Jan 25 → x = 320 (an FS arrow would leave from 520).
+    expect(container.querySelector(visibleLine)!.getAttribute('d')).toMatch(/^M 320,/);
+  });
+
+  it('clicking the arrow removes an object dependency', () => {
+    const onLinkDelete = jest.fn();
+    const onTasksChange = jest.fn();
+    const { container } = render(
+      <Gantt defaultTasks={tasks} onLinkDelete={onLinkDelete} onTasksChange={onTasksChange} />
+    );
+    fireEvent.click(container.querySelector('path[class*="dependencyLine"][data-hit]')!);
+    expect(onLinkDelete).toHaveBeenCalledWith('A', 'B');
+    expect(onTasksChange.mock.calls[0][0][1].dependencies).toEqual([]);
+    expect(container.querySelector(visibleLine)).toBeNull();
+  });
+
+  it('dragging a link onto an already linked pair does not duplicate it', () => {
+    const onTasksChange = jest.fn();
+    const { container } = render(<Gantt defaultTasks={tasks} onTasksChange={onTasksChange} />);
+    const source = container.querySelector('[data-task-id="A"]')!;
+    const target = container.querySelector('[data-task-id="B"]')!;
+
+    (document as any).elementFromPoint = () => target;
+    pointer(source.querySelector('[class*="linkConnector"]')!, 'pointerdown', 100);
+    pointer(document, 'pointermove', 300);
+    pointer(document, 'pointerup', 300);
+    delete (document as any).elementFromPoint;
+
+    expect(onTasksChange.mock.calls[0][0][1].dependencies).toHaveLength(1);
+  });
+});
