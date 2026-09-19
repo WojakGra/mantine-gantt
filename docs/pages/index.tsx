@@ -14,6 +14,7 @@ export default function HomePage() {
       <DocsTabs
         docgen={docgen}
         componentsProps={['Gantt']}
+        typesProps={['GanttTask', 'GanttColumn', 'GanttMarker', 'GanttDependency', 'GanttTreeRow']}
         componentsStyles={['Gantt']}
         stylesApiData={STYLES_API_DATA}
       >

@@ -1,7 +1,13 @@
-import dayjs from 'dayjs';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GanttDragType, GanttTask } from './types';
-import { applyAutoSchedule, snapToGrid, wouldCreateCycle } from './utils';
+import {
+  applyAutoSchedule,
+  normalizeDependency,
+  shiftTask,
+  snapToGrid,
+  wouldCreateCycle,
+  type IsNonWorkingDay,
+} from './utils';
 
 // Auto-scroll tuning (mirrors @mantine/schedule's use-auto-scroll-on-drag).
 const EDGE_THRESHOLD = 50;
@@ -39,9 +45,10 @@ export interface UseGanttDragOptions {
   contentRef: React.RefObject<HTMLDivElement | null>;
   onTaskUpdate?: (task: GanttTask) => void;
   onLinkCreate?: (fromTaskId: string, toTaskId: string) => void;
-  onLinkDelete?: (fromTaskId: string, toTaskId: string) => void;
-  /** Cascade finish-to-start successors after a move/resize commit. */
+  /** Cascade successors after a move/resize commit. */
   autoSchedule?: boolean;
+  /** Working-day calendar; set only when the chart counts durations in working days. */
+  isNonWorkingDay?: IsNonWorkingDay;
   /** Push a message to the aria-live region (drag/keyboard commits). */
   announce?: (message: string) => void;
 }
@@ -215,6 +222,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       onTaskUpdate,
       onLinkCreate,
       autoSchedule,
+      isNonWorkingDay,
       announce,
       bodyRef,
     } = optsRef.current;
@@ -234,7 +242,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
             return task;
           }
           const deps = task.dependencies || [];
-          return deps.includes(drag.taskId)
+          return deps.some((dep) => normalizeDependency(dep).taskId === drag.taskId)
             ? task
             : { ...task, dependencies: [...deps, drag.taskId] };
         })
@@ -258,30 +266,16 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       return;
     }
 
-    let next = tasks.map((task) => {
-      if (task.id !== drag.taskId) {
-        return task;
-      }
-      if (drag.type === 'move') {
-        return {
-          ...task,
-          startDate: dayjs(task.startDate).add(days, 'day').format('YYYY-MM-DD'),
-        };
-      }
-      if (drag.type === 'resize-end') {
-        return { ...task, duration: Math.max(1, task.duration + days) };
-      }
-      // resize-start: shift start, keep the right edge (duration shrinks/grows by -days).
-      return {
-        ...task,
-        startDate: dayjs(task.startDate).add(days, 'day').format('YYYY-MM-DD'),
-        duration: Math.max(1, task.duration - days),
-      };
-    });
+    const dragType = drag.type;
+    let next = tasks.map((task) =>
+      task.id === drag.taskId
+        ? { ...task, ...shiftTask(task, dragType, days, isNonWorkingDay) }
+        : task
+    );
 
-    // Cascade finish-to-start successors so they never start before this task ends.
+    // Cascade successors so their dependencies still hold.
     if (autoSchedule) {
-      next = applyAutoSchedule(next, drag.taskId);
+      next = applyAutoSchedule(next, drag.taskId, isNonWorkingDay);
     }
 
     commitTasks(next);
@@ -389,7 +383,8 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
   );
 
   const nudge = useCallback((taskId: string, action: 'move' | 'resize', days: number) => {
-    const { tasks, commitTasks, onTaskUpdate, autoSchedule, announce } = optsRef.current;
+    const { tasks, commitTasks, onTaskUpdate, autoSchedule, isNonWorkingDay, announce } =
+      optsRef.current;
     const dragged = tasks.find((t) => t.id === taskId);
     // Milestones have no length: resize is a no-op (TaskBar ignores Shift+Arrow too).
     if (action === 'resize' && dragged?.type === 'milestone') {
@@ -399,16 +394,14 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       if (task.id !== taskId) {
         return task;
       }
-      if (action === 'move') {
-        return {
-          ...task,
-          startDate: dayjs(task.startDate).add(days, 'day').format('YYYY-MM-DD'),
-        };
-      }
-      return { ...task, duration: Math.max(1, task.duration + days) };
+      // Keyboard resize changes the duration itself: a one-calendar-day step from a Friday
+      // would land on Saturday and add no working day.
+      return action === 'move'
+        ? { ...task, ...shiftTask(task, 'move', days, isNonWorkingDay) }
+        : { ...task, duration: Math.max(1, task.duration + days) };
     });
     if (autoSchedule) {
-      next = applyAutoSchedule(next, taskId);
+      next = applyAutoSchedule(next, taskId, isNonWorkingDay);
     }
     commitTasks(next);
 

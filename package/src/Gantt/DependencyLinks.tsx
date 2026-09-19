@@ -1,8 +1,14 @@
 import type { Dayjs } from 'dayjs';
 import React, { useId, useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
-import type { GanttDragType, GanttFactory, GanttTask, GanttTreeRow } from './types';
-import { barAnchors, getEffectiveTask } from './utils';
+import type {
+  GanttDependencyType,
+  GanttDragType,
+  GanttFactory,
+  GanttTask,
+  GanttTreeRow,
+} from './types';
+import { barAnchors, getEffectiveTask, normalizeDependency } from './utils';
 
 // Horizontal stub before/after an elbow, and the default elbow rounding radius.
 const CORNER_OFFSET = 10;
@@ -26,8 +32,8 @@ interface DependencyLinksProps {
   /** Virtualized row range `[firstRow, lastRow)`; links entirely above or below it are skipped. */
   firstRow?: number;
   lastRow?: number;
-  /** Called with (fromTaskId, toTaskId) when a rendered dependency line is clicked. */
-  onLinkClick?: (fromTaskId: string, toTaskId: string) => void;
+  /** Called with (fromTaskId, toTaskId, type) when a rendered dependency line is clicked. */
+  onLinkClick?: (fromTaskId: string, toTaskId: string, type: GanttDependencyType) => void;
 }
 
 export function DependencyLinks({
@@ -53,13 +59,21 @@ export function DependencyLinks({
   const taskMap = useMemo(() => {
     const map = new Map<string, { task: GanttTask; index: number }>();
     rows.forEach((row, index) => {
-      map.set(row.task.id, { task: getEffectiveTask(row), index });
+      // Anchors are geometry: measure the bar by its calendar span, not its duration.
+      map.set(row.task.id, { task: { ...getEffectiveTask(row), duration: row.span }, index });
     });
     return map;
   }, [rows]);
 
   const links = useMemo(() => {
-    const result: Array<{ id: string; points: string; critical: boolean }> = [];
+    const result: Array<{
+      key: string;
+      fromId: string;
+      toId: string;
+      type: GanttDependencyType;
+      points: string;
+      critical: boolean;
+    }> = [];
     // Bar is vertically centered in the row, so midY is simply rowHeight / 2
     const barMidYOffset = rowHeight / 2;
     const anchors = (task: GanttTask) => barAnchors(task, startDate, columnWidth, rowHeight);
@@ -71,7 +85,8 @@ export function DependencyLinks({
       }
       const { task: toTask, index: toIndex } = taskMap.get(toRow.task.id)!;
 
-      deps.forEach((fromId) => {
+      deps.forEach((dependency) => {
+        const { taskId: fromId, type } = normalizeDependency(dependency);
         const fromData = taskMap.get(fromId);
         if (!fromData) {
           // Unknown id, or endpoint hidden inside a collapsed subtree → no arrow.
@@ -89,42 +104,42 @@ export function DependencyLinks({
           return;
         }
 
-        // Calculate base positions
-        let fromBarRight = anchors(fromTask).right;
+        // The type names the ends it ties together, predecessor first: S = start (left
+        // edge), F = finish (right edge).
+        const fromSide = type[0] === 'S' ? 'left' : 'right';
+        const toSide = type[1] === 'S' ? 'left' : 'right';
+        // A dragged bar's edge follows the pointer: both edges on a move, one on a resize.
+        const edgeDelta = (taskId: string, side: 'left' | 'right') =>
+          activeDragId === taskId &&
+          (activeDragType === 'move' ||
+            activeDragType === (side === 'left' ? 'resize-start' : 'resize-end'))
+            ? dragDelta
+            : 0;
+
+        const fromX = anchors(fromTask)[fromSide] + edgeDelta(fromTask.id, fromSide);
         const fromBarMidY = fromIndex * rowHeight + barMidYOffset;
-
-        let toBarLeft = anchors(toTask).left;
+        const toX = anchors(toTask)[toSide] + edgeDelta(toTask.id, toSide);
         const toBarMidY = toIndex * rowHeight + barMidYOffset;
-
-        // Apply drag delta if this task is being dragged
-        if (activeDragId === fromTask.id && dragDelta !== 0) {
-          if (activeDragType === 'move' || activeDragType === 'resize-end') {
-            fromBarRight += dragDelta;
-          }
-          // resize-start doesn't affect the right edge position visually during drag
-          // because the width shrinks as start moves
-        }
-
-        if (activeDragId === toTask.id && dragDelta !== 0) {
-          if (activeDragType === 'move' || activeDragType === 'resize-start') {
-            toBarLeft += dragDelta;
-          }
-          // resize-end doesn't affect left position
-        }
 
         // Generate polyline points
         const points = generateLinkPoints(
-          fromBarRight,
+          fromX,
           fromBarMidY,
-          toBarLeft,
+          fromSide === 'left' ? -1 : 1,
+          toX,
           toBarMidY,
+          toSide === 'left' ? -1 : 1,
           fromIndex,
           toIndex,
           rowHeight
         );
 
         result.push({
-          id: `${fromId}~${toTask.id}`,
+          // Two dependencies between one pair are legal when their types differ.
+          key: `${fromId}~${toTask.id}~${type}`,
+          fromId,
+          toId: toTask.id,
+          type,
           // Path data ("M ... Q ..."), rendered into a <path d>.
           points,
           critical: (criticalIds?.has(fromId) && criticalIds?.has(toTask.id)) || false,
@@ -172,12 +187,9 @@ export function DependencyLinks({
       </defs>
 
       {links.map((link) => {
-        // `~` separator: task ids may themselves contain `-`, so split on the first `~`.
-        const sep = link.id.indexOf('~');
-        const fromId = link.id.slice(0, sep);
-        const toId = link.id.slice(sep + 1);
+        const { fromId, toId, type } = link;
         return (
-          <g key={link.id}>
+          <g key={link.key}>
             {/* Invisible fat stroke: the visible line is 1.5–2.5px, far too thin to click
                 reliably. This overlay widens the hit area without changing the look.
                 pointerdown must not reach .timelineBody: its pan handler captures the
@@ -188,7 +200,7 @@ export function DependencyLinks({
               data-hit
               d={link.points}
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={onLinkClick ? () => onLinkClick(fromId, toId) : undefined}
+              onClick={onLinkClick ? () => onLinkClick(fromId, toId, type) : undefined}
             />
             <path
               {...getStyles('dependencyLine')}
@@ -216,9 +228,11 @@ export function DependencyLinks({
 }
 
 /**
- * Orthogonal routing between the source bar's right edge and the target bar's left edge:
- * exit right, route through the gap between the two rows, enter left. Used for every
- * link, including backward ones (target starts before the source ends) - there the
+ * Orthogonal routing between two bar edges: step away from the source edge, route through
+ * the gap between the two rows, step into the target edge. `fromDir` / `toDir` say which
+ * way is "away from the bar" at each end (1 = right edge, -1 = left edge), so a
+ * finish-to-start link exits right and enters left. Used for every link, including
+ * backward ones (target starts before the source ends) - there the
  * horizontal segment simply runs behind the bars in between, which is fine because the
  * links SVG renders below the bars (z-index 1 vs 10).
  *
@@ -227,8 +241,10 @@ export function DependencyLinks({
 function generateLinkPoints(
   fromX: number,
   fromMidY: number,
+  fromDir: 1 | -1,
   toX: number,
   toMidY: number,
+  toDir: 1 | -1,
   fromIndex: number,
   toIndex: number,
   rowHeight: number
@@ -237,12 +253,12 @@ function generateLinkPoints(
   // Route through the gap between rows (the row boundary), never across a bar.
   const routeY = Math.max(fromIndex, toIndex) * rowHeight;
 
-  // Exit RIGHT of source → row gap → enter LEFT of target.
-  const exitX = fromX + CORNER_OFFSET;
+  // Step off the source edge → row gap → step into the target edge.
+  const exitX = fromX + fromDir * CORNER_OFFSET;
   points.push([fromX, fromMidY]);
   points.push([exitX, fromMidY]);
   points.push([exitX, routeY]);
-  const entryX = toX - CORNER_OFFSET;
+  const entryX = toX + toDir * CORNER_OFFSET;
   points.push([entryX, routeY]);
   points.push([entryX, toMidY]);
   points.push([toX, toMidY]);

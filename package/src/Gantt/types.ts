@@ -5,10 +5,42 @@ import type { BoxProps, ElementProps, Factory, MantineColor, StylesApiProps } fr
 export interface GanttColumn {
   /** Header label */
   header: ReactNode;
-  /** Cell content for a given task */
-  render: (task: GanttTask) => ReactNode;
+  /**
+   * Cell content for a given task; `locale` is the chart's `locale` prop, `row` carries the
+   * computed schedule (e.g. `row.span`, the calendar days the bar covers)
+   */
+  render: (task: GanttTask, locale: string, row: GanttTreeRow) => ReactNode;
   /** Fixed column width in px; omit to flex (1fr, 200px when the panel width is auto-sized) */
   width?: number;
+}
+
+/**
+ * Which ends a dependency ties together, predecessor first: finish-to-start (default),
+ * start-to-start, finish-to-finish, start-to-finish.
+ */
+export type GanttDependencyType = 'FS' | 'SS' | 'FF' | 'SF';
+
+/** A dependency on another task, with an optional type and lag */
+export interface GanttDependency {
+  /** Id of the predecessor task */
+  taskId: string;
+  /** Default `'FS'` */
+  type?: GanttDependencyType;
+  /**
+   * Gap in whole days, negative for a lead (overlap). Counts working days when the chart
+   * has `workingDays` on. Default `0`.
+   */
+  lag?: number;
+}
+
+/** A vertical line marking a date on the timeline (deadline, release, sprint end) */
+export interface GanttMarker {
+  /** Date in ISO format (YYYY-MM-DD); markers outside the timeline are not rendered */
+  date: string;
+  /** Label shown at the top of the line */
+  label?: ReactNode;
+  /** Line and label color, default `orange` */
+  color?: MantineColor;
 }
 
 /** Represents a single task in the Gantt chart */
@@ -19,7 +51,7 @@ export interface GanttTask {
   label: string;
   /** Start date in ISO format (YYYY-MM-DD) */
   startDate: string;
-  /** Duration in days */
+  /** Duration in days - working days when the chart has `workingDays` on */
   duration: number;
   /** Progress percentage (0-100) */
   progress: number;
@@ -29,12 +61,20 @@ export interface GanttTask {
    * duration is ignored for rendering) but can be moved and linked like tasks.
    */
   type?: 'task' | 'milestone';
-  /** IDs of tasks this task depends on */
-  dependencies?: string[];
+  /**
+   * Tasks this task depends on. A plain id is shorthand for a finish-to-start dependency
+   * with no lag; use a `GanttDependency` object for another type or a lag.
+   */
+  dependencies?: (string | GanttDependency)[];
   /** Custom color for the task bar */
   color?: MantineColor;
   /** Id of the parent task; a task that has children renders as a summary bar */
   parentId?: string;
+  /**
+   * Freeze this task's schedule: no drag, resize, keyboard nudge or outgoing link. It can
+   * still be a link target, and `autoSchedule` still shifts it to keep successors valid.
+   */
+  locked?: boolean;
   /** Planned (baseline) schedule to compare against the actual bar */
   baseline?: {
     /** Baseline start date in ISO format (YYYY-MM-DD) */
@@ -52,8 +92,10 @@ export interface GanttTreeRow {
   hasChildren: boolean;
   /** Effective start (YYYY-MM-DD): own for leaves, subtree envelope for parents */
   startDate: string;
-  /** Effective duration in days: own for leaves, envelope span for parents */
+  /** Effective duration in days: own for leaves, envelope length for parents */
   duration: number;
+  /** Calendar days the bar covers; differs from `duration` only with `workingDays` */
+  span: number;
   /** Effective progress: own for leaves, duration-weighted child average for parents */
   progress: number;
 }
@@ -82,6 +124,8 @@ export type GanttStylesNames =
   | 'majorGridLine'
   | 'weekendBackground'
   | 'todayLine'
+  | 'marker'
+  | 'markerLabel'
   | 'taskBar'
   | 'taskBarLabel'
   | 'taskBarProgress'
@@ -131,8 +175,8 @@ export interface GanttBaseProps {
   /** Callback when a dependency link is created (fromTaskId, toTaskId) */
   onLinkCreate?: (fromTaskId: string, toTaskId: string) => void;
 
-  /** Callback when a dependency link is deleted by clicking it (fromTaskId, toTaskId) */
-  onLinkDelete?: (fromTaskId: string, toTaskId: string) => void;
+  /** Callback when a dependency link is deleted by clicking it (fromTaskId, toTaskId, type) */
+  onLinkDelete?: (fromTaskId: string, toTaskId: string, type: GanttDependencyType) => void;
 
   /**
    * Automatically shift dependent tasks (finish-to-start, zero lag) when a task is
@@ -156,7 +200,8 @@ export interface GanttBaseProps {
   /**
    * Width of the task list panel in pixels. Omitted: computed from `columns` - fixed columns
    * at their `width`, flexible ones at 200px (so the default set gives 460px). Set it only to
-   * override; a value narrower than the columns need squeezes the flexible column.
+   * override; a narrower value squeezes the flexible column down to 100px, below which the
+   * width is clamped so the columns never overflow the panel.
    */
   taskListWidth?: number;
 
@@ -185,6 +230,12 @@ export interface GanttBaseProps {
    * in the header (ISO numbering) and the week separators in the grid.
    */
   weekStart?: 0 | 1;
+
+  /**
+   * BCP 47 locale for month names and dates, e.g. `'de'` or `navigator.language`
+   * <br>Default: `'en'`
+   */
+  locale?: string;
 
   /**
    * Whether to show task titles on hover
@@ -236,10 +287,28 @@ export interface GanttBaseProps {
   isNonWorkingDay?: (date: Date) => boolean;
 
   /**
+   * Count `duration`, `baseline.duration` and dependency `lag` in working days, as defined
+   * by `isNonWorkingDay`: a 5-day task started on Friday ends the next Thursday, moved
+   * tasks snap off non-working days, and `autoSchedule` skips them.
+   * <br>Default: `false`
+   */
+  workingDays?: boolean;
+
+  /**
    * Show the snapped start/end readout above a bar while it is dragged
    * <br>Default: `true`
    */
   showDragLabel?: boolean;
+
+  /** Extra vertical date lines next to the today marker */
+  markers?: GanttMarker[];
+
+  /**
+   * Disable every edit: drag, resize, linking, link deletion and keyboard nudges. Clicks,
+   * selection, expand/collapse, scrolling and zoom keep working.
+   * <br>Default: `false`
+   */
+  readOnly?: boolean;
 
   /** Id of the selected task - its bar and list row get `data-selected` */
   selectedTaskId?: string | null;

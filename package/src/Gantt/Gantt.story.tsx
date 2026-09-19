@@ -109,7 +109,6 @@ export function Interactive() {
   const handleTaskUpdate = (updatedTask: GanttTask) => {
     // eslint-disable-next-line no-console
     console.log('Task updated:', updatedTask);
-    setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
   };
 
   const handleTaskClick = (task: GanttTask) => {
@@ -125,11 +124,20 @@ export function Interactive() {
   return (
     <div style={{ padding: 20, height: 600 }}>
       <Gantt
-        defaultTasks={tasks}
+        tasks={tasks}
+        onTasksChange={setTasks}
         onTaskUpdate={handleTaskUpdate}
         onTaskClick={handleTaskClick}
         onLinkCreate={handleLinkCreate}
       />
+    </div>
+  );
+}
+
+export function CustomLocale() {
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt defaultTasks={mockTasks} locale="pl" />
     </div>
   );
 }
@@ -756,6 +764,65 @@ export function Milestones() {
   return (
     <div style={{ padding: 20, height: 400 }}>
       <Gantt defaultTasks={milestoneTasks} showTitle />
+    </div>
+  );
+}
+
+export function MarkersAndLocks() {
+  const [readOnly, setReadOnly] = useState(false);
+  return (
+    <div style={{ padding: 20, height: 400 }}>
+      <label>
+        <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} />{' '}
+        readOnly
+      </label>
+      <Gantt
+        defaultTasks={milestoneTasks.map((t) => (t.id === '1' ? { ...t, locked: true } : t))}
+        readOnly={readOnly}
+        markers={[
+          { date: '2026-04-08', label: 'Code freeze' },
+          { date: '2026-04-20', label: 'Release', color: 'green' },
+        ]}
+      />
+    </div>
+  );
+}
+
+export function WorkingDaysAndTypedLinks() {
+  // February 2026: the 6th is a Friday.
+  const typed: GanttTask[] = [
+    { id: '1', label: 'Backend', startDate: '2026-02-02', duration: 5, progress: 60 },
+    {
+      id: '2',
+      label: 'Frontend (SS +2)',
+      startDate: '2026-02-04',
+      duration: 5,
+      progress: 30,
+      color: 'teal',
+      dependencies: [{ taskId: '1', type: 'SS', lag: 2 }],
+    },
+    {
+      id: '3',
+      label: 'Docs (FF)',
+      startDate: '2026-02-09',
+      duration: 2,
+      progress: 0,
+      color: 'grape',
+      dependencies: [{ taskId: '2', type: 'FF' }],
+    },
+    {
+      id: '4',
+      label: 'Release (FS)',
+      startDate: '2026-02-12',
+      duration: 1,
+      progress: 0,
+      color: 'red',
+      dependencies: ['2'],
+    },
+  ];
+  return (
+    <div style={{ padding: 20, height: 400 }}>
+      <Gantt defaultTasks={typed} workingDays autoSchedule highlightCriticalPath />
     </div>
   );
 }

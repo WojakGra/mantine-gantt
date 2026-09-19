@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import type { GanttTask } from './types';
 import {
+  addWorkingDays,
   applyAutoSchedule,
   barAnchors,
   buildSuccessorMap,
@@ -14,8 +15,12 @@ import {
   getCriticalPath,
   getEffectiveTask,
   getTaskEndDate,
+  getTaskSpan,
+  isWeekend,
+  normalizeDependency,
   pixelsToDuration,
   pixelToDate,
+  shiftTask,
   snapToGrid,
   visibleRowRange,
   wouldCreateCycle,
@@ -305,6 +310,13 @@ describe('utils', () => {
 
     it('handles Date objects', () => {
       expect(formatTaskDate(new Date('2026-03-01'))).toBe('Mar 1, 2026');
+    });
+
+    it('formats in the given locale', () => {
+      expect(formatTaskDate('2026-03-01', 'de')).toBe('1. März 2026');
+      expect(generateWeekHeaders(dayjs('2026-05-04'), dayjs('2026-05-10'), 1, 'pl')[0].label).toBe(
+        'maj'
+      );
     });
   });
 
@@ -683,5 +695,149 @@ describe('barAnchors', () => {
     // Column center is 100; half-diagonal = (24 * 0.7) / √2 ≈ 11.88
     expect(m.left).toBeCloseTo(100 - 11.88, 1);
     expect(m.right).toBeCloseTo(100 + 11.88, 1);
+  });
+});
+
+// February 2026: Sun 1, Mon 2 ... Fri 6, Sat 7, Sun 8, Mon 9 ... Thu 12.
+describe('working-day math', () => {
+  const fmt = (d: dayjs.Dayjs) => d.format('YYYY-MM-DD');
+
+  it('addWorkingDays without a calendar is plain day arithmetic', () => {
+    expect(fmt(addWorkingDays(dayjs('2026-02-06'), 3))).toBe('2026-02-09');
+  });
+
+  it('addWorkingDays skips non-working days in both directions', () => {
+    expect(fmt(addWorkingDays(dayjs('2026-02-06'), 1, isWeekend))).toBe('2026-02-09');
+    expect(fmt(addWorkingDays(dayjs('2026-02-09'), -1, isWeekend))).toBe('2026-02-06');
+    // Zero days from a Saturday still lands on a working day.
+    expect(fmt(addWorkingDays(dayjs('2026-02-07'), 0, isWeekend))).toBe('2026-02-09');
+  });
+
+  it('a 5-day task started on Friday ends on Thursday and spans 7 calendar days', () => {
+    expect(fmt(getTaskEndDate('2026-02-06', 5, isWeekend))).toBe('2026-02-12');
+    expect(getTaskSpan('2026-02-06', 5, isWeekend)).toBe(7);
+    expect(getTaskSpan('2026-02-06', 5)).toBe(5);
+    expect(getTaskSpan('2026-02-06', 0, isWeekend)).toBe(0);
+  });
+
+  it('buildTaskTree carries the calendar span on each row', () => {
+    const tasks: GanttTask[] = [
+      { id: 'a', label: 'a', startDate: '2026-02-06', duration: 5, progress: 0 },
+    ];
+    expect(buildTaskTree(tasks, new Set())[0].span).toBe(5);
+    expect(buildTaskTree(tasks, new Set(), isWeekend)[0].span).toBe(7);
+  });
+});
+
+describe('shiftTask', () => {
+  const task = { startDate: '2026-02-02', duration: 5 };
+
+  it('calendar mode keeps the legacy arithmetic', () => {
+    expect(shiftTask(task, 'move', 2)).toEqual({ startDate: '2026-02-04', duration: 5 });
+    expect(shiftTask(task, 'resize-end', 2)).toEqual({ startDate: '2026-02-02', duration: 7 });
+    expect(shiftTask(task, 'resize-start', 1)).toEqual({ startDate: '2026-02-03', duration: 4 });
+    expect(shiftTask(task, 'resize-end', -9).duration).toBe(1);
+  });
+
+  it('calendar resize-start past the end clamps to a one-day task on the end date', () => {
+    expect(shiftTask(task, 'resize-start', 10)).toEqual({ startDate: '2026-02-06', duration: 1 });
+  });
+
+  it('a move snaps to a working day in the direction of travel', () => {
+    const thu = { startDate: '2026-02-05', duration: 1 };
+    expect(shiftTask(thu, 'move', 2, isWeekend).startDate).toBe('2026-02-09');
+    const mon = { startDate: '2026-02-09', duration: 1 };
+    expect(shiftTask(mon, 'move', -1, isWeekend).startDate).toBe('2026-02-06');
+  });
+
+  it('resize-end recounts working days up to the new calendar end', () => {
+    // Mon-Fri; dragging the end onto Sunday adds no working day, onto Monday adds one.
+    expect(shiftTask(task, 'resize-end', 2, isWeekend).duration).toBe(5);
+    expect(shiftTask(task, 'resize-end', 3, isWeekend).duration).toBe(6);
+  });
+
+  it('resize-start keeps the end and recounts', () => {
+    expect(shiftTask(task, 'resize-start', 1, isWeekend)).toEqual({
+      startDate: '2026-02-03',
+      duration: 4,
+    });
+    // Past the end: clamps to a one-day task on the end date.
+    expect(shiftTask(task, 'resize-start', 30, isWeekend)).toEqual({
+      startDate: '2026-02-06',
+      duration: 1,
+    });
+  });
+});
+
+describe('typed dependencies', () => {
+  const t = (id: string, over: Partial<GanttTask> = {}): GanttTask => ({
+    id,
+    label: id,
+    startDate: '2026-02-02',
+    duration: 5,
+    progress: 0,
+    ...over,
+  });
+  const startOf = (tasks: GanttTask[], id: string) => tasks.find((x) => x.id === id)!.startDate;
+
+  it('normalizeDependency expands the string shorthand', () => {
+    expect(normalizeDependency('a')).toEqual({ taskId: 'a', type: 'FS', lag: 0 });
+    expect(normalizeDependency({ taskId: 'a', type: 'SS' })).toEqual({
+      taskId: 'a',
+      type: 'SS',
+      lag: 0,
+    });
+  });
+
+  it('cycle detection and the successor map read object dependencies', () => {
+    const tasks = [t('a'), t('b', { dependencies: [{ taskId: 'a', type: 'SS' }] })];
+    expect(wouldCreateCycle(tasks, 'b', 'a')).toBe(true);
+    expect(buildSuccessorMap(tasks).get('a')).toEqual(['b']);
+  });
+
+  it('FS with lag leaves a gap', () => {
+    // a ends Feb 6; lag 1 → b may start Feb 8.
+    const tasks = [t('a'), t('b', { dependencies: [{ taskId: 'a', lag: 1 }] })];
+    expect(startOf(applyAutoSchedule(tasks, 'a'), 'b')).toBe('2026-02-08');
+  });
+
+  it('SS aligns starts (plus lag)', () => {
+    const tasks = [t('a'), t('b', { dependencies: [{ taskId: 'a', type: 'SS', lag: 2 }] })];
+    expect(startOf(applyAutoSchedule(tasks, 'a'), 'b')).toBe('2026-02-04');
+  });
+
+  it('FF aligns ends', () => {
+    // a: Feb 2-11. b is 3 days, so it must start Feb 9 to end Feb 11.
+    const tasks = [
+      t('a', { duration: 10 }),
+      t('b', { duration: 3, dependencies: [{ taskId: 'a', type: 'FF' }] }),
+    ];
+    expect(startOf(applyAutoSchedule(tasks, 'a'), 'b')).toBe('2026-02-09');
+  });
+
+  it('SF: the successor must finish the day before the predecessor starts, or later', () => {
+    // a starts Feb 10 → b (3 days) must end Feb 9 at the earliest → start Feb 7.
+    const tasks = [
+      t('a', { startDate: '2026-02-10' }),
+      t('b', { duration: 3, dependencies: [{ taskId: 'a', type: 'SF' }] }),
+    ];
+    expect(startOf(applyAutoSchedule(tasks, 'a'), 'b')).toBe('2026-02-07');
+  });
+
+  it('with a calendar, FS lands on the next working day and lag counts working days', () => {
+    // a: Mon Feb 2 - Fri Feb 6.
+    const plain = [t('a'), t('b', { dependencies: ['a'] })];
+    expect(startOf(applyAutoSchedule(plain, 'a', isWeekend), 'b')).toBe('2026-02-09');
+    const lagged = [t('a'), t('b', { dependencies: [{ taskId: 'a', lag: 1 }] })];
+    expect(startOf(applyAutoSchedule(lagged, 'a', isWeekend), 'b')).toBe('2026-02-10');
+  });
+
+  it('critical path honours SS: a parallel short task is not critical', () => {
+    const tasks = [
+      t('a', { duration: 10 }),
+      t('b', { duration: 3, dependencies: [{ taskId: 'a', type: 'SS' }] }),
+      t('c', { duration: 2, dependencies: ['a'] }),
+    ];
+    expect([...getCriticalPath(tasks)].sort()).toEqual(['a', 'c']);
   });
 });

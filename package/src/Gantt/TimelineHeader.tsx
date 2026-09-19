@@ -2,7 +2,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import React, { useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
 import type { GanttFactory } from './types';
-import { generateDayHeaders, generateWeekHeaders } from './utils';
+import { formatDate, generateDayHeaders, generateWeekHeaders } from './utils';
 
 interface TimelineHeaderProps {
   startDate: Dayjs;
@@ -12,6 +12,7 @@ interface TimelineHeaderProps {
   totalWidth: number;
   viewMode: 'day' | 'week' | 'month';
   weekStart: 0 | 1;
+  locale: string;
   isNonWorkingDay?: (date: Date) => boolean;
 }
 
@@ -23,6 +24,7 @@ export function TimelineHeader({
   totalWidth,
   viewMode,
   weekStart,
+  locale,
   isNonWorkingDay,
 }: TimelineHeaderProps) {
   const today = dayjs();
@@ -33,8 +35,8 @@ export function TimelineHeader({
   );
 
   const weekHeaders = useMemo(
-    () => generateWeekHeaders(startDate, endDate, weekStart),
-    [startDate, endDate, weekStart]
+    () => generateWeekHeaders(startDate, endDate, weekStart, locale),
+    [startDate, endDate, weekStart, locale]
   );
 
   // Generate month headers for month view
@@ -49,14 +51,14 @@ export function TimelineHeader({
       const days = actualEnd.diff(actualStart, 'day') + 1;
 
       months.push({
-        label: current.format('MMMM YYYY'),
+        label: formatDate(current, locale, { month: 'long', year: 'numeric' }),
         days,
       });
       current = current.add(1, 'month').startOf('month');
     }
 
     return months;
-  }, [startDate, endDate]);
+  }, [startDate, endDate, locale]);
 
   return (
     <div {...getStyles('timelineHeaderInner', { style: { width: totalWidth } })}>

@@ -33,6 +33,9 @@ everything is open), and `onToggleExpand` reports each toggle.
 the day column derived from `columnWidth` rather than changing the underlying day grid, so drags
 still snap to whole days. `weekStart` controls the header's week numbering and the grid separators.
 
+`locale` (default `'en'`) sets the language of month names and dates - pass `'de'`, or
+`navigator.language` to follow the browser.
+
 <Demo data={demos.viewMode} />
 
 ## Navigation, zoom and selection
@@ -77,11 +80,96 @@ and keyboard nudges alike. Turned off by default.
 
 <Demo data={demos.autoSchedule} />
 
+## Dependency types and lag
+
+An entry in `dependencies` is either a task id or an object. The id is shorthand for a
+finish-to-start link with no lag, so existing data keeps working.
+
+```tsx
+dependencies: [
+  '1', // finish-to-start, no lag
+  { taskId: '2', type: 'SS', lag: 2 }, // start 2 days after task 2 starts
+  { taskId: '3', type: 'FF', lag: -1 }, // finish 1 day before task 3 finishes
+];
+```
+
+`type` is `'FS'` (default), `'SS'`, `'FF'` or `'SF'` - predecessor first, `S` for start and `F`
+for finish. `lag` is whole days, negative for a lead. The arrow attaches to the ends the type
+names, `autoSchedule` enforces the constraint and the critical path accounts for it.
+
+Dragging the link connector always creates a finish-to-start link; set other types and lags in
+your data. Code that reads `dependencies` can normalize both shapes with `normalizeDependency`:
+
+```tsx
+import { normalizeDependency } from 'mantine-gantt';
+
+const ids = (task.dependencies ?? []).map(
+  (dep) => normalizeDependency(dep).taskId
+);
+```
+
+## Working days
+
+By default `duration` counts calendar days and `isNonWorkingDay` only shades columns. With
+`workingDays`, `duration`, `baseline.duration` and dependency `lag` count working days: a 5-day
+task that starts on Friday ends the next Thursday and its bar stretches across the weekend.
+
+- A task dropped on a non-working day snaps to the next working day in the direction it moved.
+- Resizing recounts the working days between the bar's new ends.
+- `autoSchedule` places successors on working days.
+- `isNonWorkingDay` defines the calendar, so holidays work the same way as weekends.
+
+A custom column gets the computed row as a third argument; `row.span` is the number of calendar
+days the bar covers, which is what you need to print an end date:
+
+```tsx
+const endColumn: GanttColumn = {
+  header: 'End',
+  render: (task, locale, row) =>
+    dayjs(task.startDate)
+      .add(Math.max(0, row.span - 1), 'day')
+      .format('YYYY-MM-DD'),
+};
+```
+
+<Demo data={demos.workingDays} />
+
 ## Deleting dependency links
 
 Click a dependency arrow to delete that link. The component removes the source id from the
-target's `dependencies` and fires `onLinkDelete(fromTaskId, toTaskId)` alongside `onTasksChange`,
+target's `dependencies` and fires `onLinkDelete(fromTaskId, toTaskId, type)` alongside `onTasksChange`,
 mirroring how link creation works.
+
+## Markers
+
+`markers` draws extra vertical lines next to the today marker: a deadline, a release, a sprint
+end. Each takes a `date` (`YYYY-MM-DD`), an optional `label` and a `color` (default `orange`).
+A marker outside the timeline is not rendered and does not widen it - set `startDate` / `endDate`
+if it has to be visible.
+
+<Demo data={demos.markers} />
+
+## Read-only and locked tasks
+
+`readOnly` turns off every edit: drag, resize, linking, link deletion and keyboard nudges.
+`onTaskClick`, selection, expand/collapse, scrolling and zoom keep working. To freeze a single
+task, set `locked: true` on it. A locked task can still be the target of a new link, and
+`autoSchedule` still shifts it, because a successor that starts before its predecessor ends would
+make the chart lie.
+
+To reject or clamp a single change instead, use controlled mode and decide in `onTasksChange`:
+
+```tsx
+<Gantt
+  tasks={tasks}
+  onTasksChange={(next) => {
+    // no task may start before the project kickoff
+    if (next.every((task) => task.startDate >= '2026-04-01')) {
+      setTasks(next);
+    }
+  }}
+/>
+```
 
 ## Controlled and uncontrolled
 
