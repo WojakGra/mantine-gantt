@@ -125,11 +125,19 @@ export function Interactive() {
   return (
     <div style={{ padding: 20, height: 600 }}>
       <Gantt
-        defaultTasks={tasks}
+        tasks={tasks}
         onTaskUpdate={handleTaskUpdate}
         onTaskClick={handleTaskClick}
         onLinkCreate={handleLinkCreate}
       />
+    </div>
+  );
+}
+
+export function CustomLocale() {
+  return (
+    <div style={{ padding: 20, height: 600 }}>
+      <Gantt defaultTasks={mockTasks} locale="pl" />
     </div>
   );
 }

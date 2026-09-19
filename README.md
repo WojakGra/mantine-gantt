@@ -93,21 +93,22 @@ otherwise the bars will not move.
 
 ## Props
 
-| Prop            | Type                 | Default | Description                                    |
-| --------------- | -------------------- | ------- | ---------------------------------------------- |
-| `tasks`         | `GanttTask[]`        | -       | Tasks to display (controlled)                  |
-| `defaultTasks`  | `GanttTask[]`        | -       | Initial tasks (uncontrolled)                   |
-| `onTasksChange` | `(tasks) => void`    | -       | Called with the full new list after any change |
-| `columnWidth`   | `number`             | `40`    | Width of each day column in pixels             |
-| `rowHeight`     | `number`             | `44`    | Height of each task row in pixels              |
-| `taskListWidth` | `number`             | auto    | Panel width; auto = sum of `columns` widths    |
-| `weekStart`     | `0 \| 1`             | `1`     | First day of the week (0 = Sunday, 1 = Monday) |
-| `showTitle`     | `boolean`            | `false` | Show task title on hover                       |
-| `startDate`     | `Date`               | Auto    | Start date of the timeline                     |
-| `endDate`       | `Date`               | Auto    | End date of the timeline                       |
-| `onTaskUpdate`  | `(task) => void`     | -       | Callback when a task is updated                |
-| `onTaskClick`   | `(task) => void`     | -       | Callback when a task is clicked                |
-| `onLinkCreate`  | `(from, to) => void` | -       | Callback when a dependency is created          |
+| Prop            | Type                 | Default | Description                                                                  |
+| --------------- | -------------------- | ------- | ---------------------------------------------------------------------------- |
+| `tasks`         | `GanttTask[]`        | -       | Tasks to display (controlled)                                                |
+| `defaultTasks`  | `GanttTask[]`        | -       | Initial tasks (uncontrolled)                                                 |
+| `onTasksChange` | `(tasks) => void`    | -       | Called with the full new list after any change                               |
+| `columnWidth`   | `number`             | `40`    | Width of each day column in pixels                                           |
+| `rowHeight`     | `number`             | `44`    | Height of each task row in pixels                                            |
+| `taskListWidth` | `number`             | auto    | Panel width; auto = sum of `columns` widths                                  |
+| `weekStart`     | `0 \| 1`             | `1`     | First day of the week (0 = Sunday, 1 = Monday)                               |
+| `locale`        | `string`             | `'en'`  | BCP 47 locale for month names and dates, e.g. `'de'` or `navigator.language` |
+| `showTitle`     | `boolean`            | `false` | Show task title on hover                                                     |
+| `startDate`     | `Date`               | Auto    | Start date of the timeline                                                   |
+| `endDate`       | `Date`               | Auto    | End date of the timeline                                                     |
+| `onTaskUpdate`  | `(task) => void`     | -       | Callback when a task is updated                                              |
+| `onTaskClick`   | `(task) => void`     | -       | Callback when a task is clicked                                              |
+| `onLinkCreate`  | `(from, to) => void` | -       | Callback when a dependency is created                                        |
 
 ## Task Object
 

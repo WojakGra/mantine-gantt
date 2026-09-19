@@ -5,8 +5,8 @@ import type { BoxProps, ElementProps, Factory, MantineColor, StylesApiProps } fr
 export interface GanttColumn {
   /** Header label */
   header: ReactNode;
-  /** Cell content for a given task */
-  render: (task: GanttTask) => ReactNode;
+  /** Cell content for a given task; `locale` is the chart's `locale` prop */
+  render: (task: GanttTask, locale: string) => ReactNode;
   /** Fixed column width in px; omit to flex (1fr, 200px when the panel width is auto-sized) */
   width?: number;
 }
@@ -186,6 +186,12 @@ export interface GanttBaseProps {
    * in the header (ISO numbering) and the week separators in the grid.
    */
   weekStart?: 0 | 1;
+
+  /**
+   * BCP 47 locale for month names and dates, e.g. `'de'` or `navigator.language`
+   * <br>Default: `'en'`
+   */
+  locale?: string;
 
   /**
    * Whether to show task titles on hover

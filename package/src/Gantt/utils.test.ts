@@ -306,6 +306,13 @@ describe('utils', () => {
     it('handles Date objects', () => {
       expect(formatTaskDate(new Date('2026-03-01'))).toBe('Mar 1, 2026');
     });
+
+    it('formats in the given locale', () => {
+      expect(formatTaskDate('2026-03-01', 'de')).toBe('1. März 2026');
+      expect(generateWeekHeaders(dayjs('2026-05-04'), dayjs('2026-05-10'), 1, 'pl')[0].label).toBe(
+        'maj'
+      );
+    });
   });
 
   describe('getTaskEndDate', () => {

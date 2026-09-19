@@ -5,10 +5,10 @@ import { formatTaskDate, getEffectiveTask, getTaskEndDate } from './utils';
 
 export const defaultColumns: GanttColumn[] = [
   { header: 'Task Name', render: (t) => t.label },
-  { header: 'Start', render: (t) => formatTaskDate(t.startDate), width: 90 },
+  { header: 'Start', render: (t, locale) => formatTaskDate(t.startDate, locale), width: 90 },
   {
     header: 'End',
-    render: (t) => formatTaskDate(getTaskEndDate(t.startDate, t.duration)),
+    render: (t, locale) => formatTaskDate(getTaskEndDate(t.startDate, t.duration), locale),
     width: 90,
   },
   { header: 'Duration', render: (t) => `${t.duration}d`, width: 80 },
@@ -28,6 +28,7 @@ interface TaskListProps {
   /** Height of the whole list, visible or not - keeps scrollHeight in sync with the timeline. */
   contentHeight: number;
   selectedTaskId?: string | null;
+  locale: string;
 }
 
 export function TaskList({
@@ -41,6 +42,7 @@ export function TaskList({
   offsetTop,
   contentHeight,
   selectedTaskId,
+  locale,
 }: TaskListProps) {
   // Flex the first flexible column, fix the rest to their width. Set inline because the
   // column set is runtime data - same pattern as the timeline's inline geometry.
@@ -75,7 +77,7 @@ export function TaskList({
                 style={{ gridTemplateColumns }}
               >
                 {columns.map((col, i) => {
-                  const content = col.render(task);
+                  const content = col.render(task, locale);
                   const indent =
                     i === 0 && row.depth > 0
                       ? {

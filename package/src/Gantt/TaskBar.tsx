@@ -2,7 +2,13 @@ import dayjs, { type Dayjs } from 'dayjs';
 import React from 'react';
 import { getThemeColor, Tooltip, useMantineTheme, type GetStylesApi } from '@mantine/core';
 import type { GanttDragType, GanttFactory, GanttTask } from './types';
-import { dateToPixel, durationToPixels, formatTaskDate, getTaskEndDate, snapToGrid } from './utils';
+import {
+  dateToPixel,
+  durationToPixels,
+  formatTaskDate as formatDate,
+  getTaskEndDate,
+  snapToGrid,
+} from './utils';
 
 interface TaskBarProps {
   task: GanttTask;
@@ -29,6 +35,7 @@ interface TaskBarProps {
   didDrag: () => boolean;
   nudge: (taskId: string, action: 'move' | 'resize', days: number) => void;
   onTaskClick?: (task: GanttTask) => void;
+  locale: string;
 }
 
 function TaskBarComponent({
@@ -49,8 +56,10 @@ function TaskBarComponent({
   didDrag,
   nudge,
   onTaskClick,
+  locale,
 }: TaskBarProps) {
   const theme = useMantineTheme();
+  const formatTaskDate = (date: string | Dayjs) => formatDate(date, locale);
 
   const isMilestone = task.type === 'milestone';
   // Milestones are zero-length markers rendered as a fixed-size diamond.
@@ -236,6 +245,7 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.didDrag === nextProps.didDrag &&
     prevProps.nudge === nextProps.nudge &&
     prevProps.onTaskClick === nextProps.onTaskClick &&
+    prevProps.locale === nextProps.locale &&
     prevProps.startDate.isSame(nextProps.startDate)
   );
 }

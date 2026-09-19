@@ -33,6 +33,9 @@ everything is open), and `onToggleExpand` reports each toggle.
 the day column derived from `columnWidth` rather than changing the underlying day grid, so drags
 still snap to whole days. `weekStart` controls the header's week numbering and the grid separators.
 
+`locale` (default `'en'`) sets the language of month names and dates - pass `'de'`, or
+`navigator.language` to follow the browser.
+
 <Demo data={demos.viewMode} />
 
 ## Navigation, zoom and selection

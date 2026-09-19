@@ -4,6 +4,25 @@ import type { GanttTask, GanttTreeRow } from './types';
 
 dayjs.extend(isoWeek);
 
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * Locale-aware date formatting on native Intl; formatters are cached because constructing one is slow
+ */
+export function formatDate(
+  date: string | Date | Dayjs,
+  locale: string,
+  options: Intl.DateTimeFormatOptions
+): string {
+  const key = locale + JSON.stringify(options);
+  let formatter = formatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, options);
+    formatters.set(key, formatter);
+  }
+  return formatter.format(dayjs(date).toDate());
+}
+
 /**
  * Convert a date to pixel position relative to timeline start
  */
@@ -108,7 +127,8 @@ export function startOfWeek(date: Dayjs, weekStart: 0 | 1 = 1): Dayjs {
 export function generateWeekHeaders(
   startDate: Dayjs,
   endDate: Dayjs,
-  weekStart: 0 | 1 = 1
+  weekStart: 0 | 1 = 1,
+  locale = 'en'
 ): Array<{ startDate: Dayjs; endDate: Dayjs; label: string; days: number; weekNumber: number }> {
   const weeks: Array<{
     startDate: Dayjs;
@@ -126,7 +146,7 @@ export function generateWeekHeaders(
     const days = actualEnd.diff(actualStart, 'day') + 1;
 
     // Format label as just month abbreviation
-    const label = actualStart.format('MMM');
+    const label = formatDate(actualStart, locale, { month: 'short' });
 
     // isoWeek() numbers Monday-based weeks, so a Sunday-start week takes the number
     // of the Monday it contains - otherwise its Sunday would report the previous week.
@@ -212,8 +232,8 @@ export function calculateTimelineBounds(
 /**
  * Format date for display in task list
  */
-export function formatTaskDate(date: string | Date | Dayjs): string {
-  return dayjs(date).format('MMM D, YYYY');
+export function formatTaskDate(date: string | Date | Dayjs, locale = 'en'): string {
+  return formatDate(date, locale, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 /**

@@ -62,6 +62,7 @@ const defaultProps: Partial<GanttProps> = {
   showTodayMarker: true,
   viewMode: 'day',
   weekStart: 1,
+  locale: 'en',
   highlightCriticalPath: false,
   criticalPathColor: 'red',
   showBaselines: true,
@@ -109,6 +110,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     endDate,
     viewMode = 'day',
     weekStart = 1,
+    locale = 'en',
     highlightCriticalPath,
     criticalPathColor,
     showBaselines,
@@ -547,6 +549,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
       <TaskList
         rows={visibleRows}
         columns={columns}
+        locale={locale}
         getStyles={getStyles}
         bodyRef={taskListBodyRef}
         onScroll={handleTaskListScroll}
@@ -568,6 +571,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
             totalWidth={timelineWidth}
             viewMode={viewMode}
             weekStart={weekStart}
+            locale={locale}
             isNonWorkingDay={isNonWorkingDay}
           />
         </div>
@@ -628,6 +632,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                     startDrag={drag.startDrag}
                     didDrag={drag.didDrag}
                     nudge={drag.nudge}
+                    locale={locale}
                     onTaskClick={handleTaskClick}
                     isCritical={criticalIds.has(task.id)}
                     isSelected={task.id === selectedTaskId}
