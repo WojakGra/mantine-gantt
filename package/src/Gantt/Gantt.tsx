@@ -281,24 +281,14 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   const [firstRow, lastRow] = visibleRowRange(scrollTop, viewport.height, rowHeight, rows.length);
   const visibleRows = rows.slice(firstRow, lastRow);
 
-  // Sync scroll between task list and timeline. `echoRef` remembers the value we assigned
-  // programmatically, so the scroll event fired by that very assignment can be recognized
-  // and ignored - without it, the two handlers would echo back and forth. Matching on the
-  // value (not a boolean flag) means a swallowed echo can never eat a real user scroll.
-  const echoRef = useRef<{ source: 'timeline' | 'list'; value: number } | null>(null);
-
+  // Sync scroll between task list and timeline. Assigning an unchanged scrollTop fires no
+  // scroll event, so the two handlers can't echo back and forth.
   const handleTimelineScroll = useCallback(() => {
     const body = timelineBodyRef.current;
     if (!body) {
       return;
     }
-    const echo = echoRef.current;
-    if (echo?.source === 'timeline' && echo.value === body.scrollTop) {
-      echoRef.current = null;
-      return;
-    }
     if (taskListBodyRef.current) {
-      echoRef.current = { source: 'timeline', value: body.scrollTop };
       taskListBodyRef.current.scrollTop = body.scrollTop;
     }
     // Sync horizontal scroll with header
@@ -311,18 +301,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   }, []);
 
   const handleTaskListScroll = useCallback(() => {
-    const list = taskListBodyRef.current;
-    if (!list) {
-      return;
-    }
-    const echo = echoRef.current;
-    if (echo?.source === 'list' && echo.value === list.scrollTop) {
-      echoRef.current = null;
-      return;
-    }
-    if (timelineBodyRef.current) {
-      echoRef.current = { source: 'list', value: list.scrollTop };
-      timelineBodyRef.current.scrollTop = list.scrollTop;
+    if (taskListBodyRef.current && timelineBodyRef.current) {
+      timelineBodyRef.current.scrollTop = taskListBodyRef.current.scrollTop;
     }
   }, []);
 

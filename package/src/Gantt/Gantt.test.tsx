@@ -648,6 +648,17 @@ describe('interaction extras', () => {
     // Feb 8 is 7 days after the Feb 1 start, minus one column of context.
     expect(body.scrollLeft).toBe(240);
   });
+
+  it('keeps the header aligned on every horizontal scroll event', () => {
+    const { container } = render(<Gantt tasks={mockTasks} columnWidth={40} />);
+    const body = container.querySelector('[class*="timelineBody"]') as HTMLElement;
+    const header = container.querySelector('[class*="timelineHeader"]') as HTMLElement;
+    [10, 20, 30].forEach((left) => {
+      body.scrollLeft = left;
+      fireEvent.scroll(body);
+      expect(header.scrollLeft).toBe(left);
+    });
+  });
 });
 
 describe('milestones', () => {
