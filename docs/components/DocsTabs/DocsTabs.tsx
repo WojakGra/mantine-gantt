@@ -12,6 +12,7 @@ interface DocsTabsProps {
   docgen: any;
   stylesApiData?: any;
   componentsProps?: string[];
+  typesProps?: string[];
   componentsStyles?: string[];
   componentPrefix?: string;
 }
@@ -20,6 +21,7 @@ export function DocsTabs({
   children,
   docgen,
   componentsProps,
+  typesProps,
   componentsStyles,
   stylesApiData,
   componentPrefix,
@@ -93,7 +95,7 @@ export function DocsTabs({
 
         <Tabs.Panel value="props">
           <div className={classes.tabContent} data-secondary>
-            <PropsTablesList components={componentsProps!} data={docgen} />
+            <PropsTablesList components={componentsProps!} types={typesProps} data={docgen} />
           </div>
         </Tabs.Panel>
 

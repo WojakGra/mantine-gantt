@@ -7,17 +7,25 @@ import classes from './PropsTablesList.module.css';
 
 export interface PropsTablesListProps {
   components: string[];
+  /** Keys of `data` that document plain types, not components */
+  types?: string[];
   data: any;
   componentPrefix?: string;
 }
 
-export function PropsTablesList({ components, componentPrefix, data }: PropsTablesListProps) {
+export function PropsTablesList({
+  components,
+  types = [],
+  componentPrefix,
+  data,
+}: PropsTablesListProps) {
   const [query, setQuery] = useState('');
 
-  const tables = components.map((component) => (
+  const tables = [...components, ...types].map((component) => (
     <div key={component} className={classes.section}>
       <Title order={2} className={classes.title}>
-        {getComponentName({ component, componentPrefix })} component props
+        {getComponentName({ component, componentPrefix })}{' '}
+        {types.includes(component) ? 'type' : 'component props'}
       </Title>
       <PropsTable component={component} query={query} data={data} />
     </div>
