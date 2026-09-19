@@ -329,6 +329,12 @@
   cursor: default;
 }
 
+/* Locked / read-only bar: still clickable, but nothing to grab; let touch scroll through. */
+.taskBar[data-locked] {
+  cursor: default;
+  touch-action: auto;
+}
+
 .taskBar[data-summary] .taskBarLabel {
   display: none;
 }
@@ -559,14 +565,22 @@
 /* ============================================
    TODAY LINE
    ============================================ */
+/* No z-index here on purpose (same as .marker): the line runs behind the task bars while
+   the dot stays on top. */
 .todayLine {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 2px;
-  background-color: var(--mantine-color-red-6);
-  z-index: 50;
   pointer-events: none;
+}
+
+.todayLine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--mantine-color-red-6);
+  z-index: 5; /* under .taskBar (10), over the dependency arrows (1) */
 }
 
 .todayLine::before {
@@ -578,6 +592,43 @@
   height: 10px;
   background-color: var(--mantine-color-red-6);
   border-radius: 50%;
+  z-index: 50;
+}
+
+/* ============================================
+   MARKERS
+   ============================================ */
+/* No z-index here on purpose: the line and the label then stack separately in the
+   timeline, so the line can run behind the task bars while the label stays on top. */
+.marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  pointer-events: none;
+}
+
+.marker::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--marker-color);
+  z-index: 5; /* under .taskBar (10), over the dependency arrows (1) */
+}
+
+/* Sticky so the label stays visible while the rows scroll under it. */
+.markerLabel {
+  position: sticky;
+  top: 4px;
+  z-index: 49;
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--marker-color);
+  color: var(--mantine-color-white);
+  font-size: var(--mantine-font-size-xs);
+  white-space: nowrap;
 }
 
 /* ============================================

@@ -5,6 +5,7 @@ import {
   createVarsResolver,
   factory,
   getThemeColor,
+  useMantineTheme,
   useProps,
   useStyles,
   VisuallyHidden,
@@ -84,6 +85,7 @@ const varsResolver = createVarsResolver<GanttFactory>(
 
 export const Gantt = factory<GanttFactory>((_props, ref) => {
   const props = useProps('Gantt', defaultProps, _props);
+  const theme = useMantineTheme();
   const {
     classNames,
     className,
@@ -119,6 +121,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     scrollTo,
     isNonWorkingDay,
     selectedTaskId,
+    markers,
+    readOnly,
     onColumnWidthChange,
     showDragLabel,
     ...others
@@ -607,6 +611,28 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
               <div {...getStyles('todayLine', { style: { left: todayPosition } })} />
             )}
 
+            {markers?.map((marker) => {
+              const date = dayjs(marker.date);
+              if (date.isBefore(bounds.start) || date.isAfter(displayEnd)) {
+                return null;
+              }
+              return (
+                <div
+                  key={`${marker.date}-${marker.color ?? ''}`}
+                  {...getStyles('marker', {
+                    style: {
+                      left: dateToPixel(date, bounds.start, effectiveColumnWidth),
+                      ['--marker-color' as string]: getThemeColor(marker.color ?? 'orange', theme),
+                    },
+                  })}
+                >
+                  {marker.label != null && (
+                    <span {...getStyles('markerLabel')}>{marker.label}</span>
+                  )}
+                </div>
+              );
+            })}
+
             {/* Task rows with bars */}
             {visibleRows.map((row, i) => {
               const index = firstRow + i;
@@ -625,6 +651,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
                     columnWidth={effectiveColumnWidth}
                     getStyles={getStyles}
                     isSummary={row.hasChildren}
+                    isLocked={readOnly || task.locked}
                     isDragging={active?.taskId === task.id && active.type !== 'link'}
                     isLinkTarget={active?.type === 'link' && active.dropTargetId === task.id}
                     dragType={active?.taskId === task.id ? active.type : null}
@@ -672,7 +699,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
               criticalIds={criticalIds}
               firstRow={firstRow}
               lastRow={lastRow}
-              onLinkClick={handleLinkDelete}
+              onLinkClick={readOnly ? undefined : handleLinkDelete}
             />
           </div>
         </div>

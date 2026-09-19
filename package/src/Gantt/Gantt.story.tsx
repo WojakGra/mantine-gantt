@@ -768,6 +768,26 @@ export function Milestones() {
   );
 }
 
+export function MarkersAndLocks() {
+  const [readOnly, setReadOnly] = useState(false);
+  return (
+    <div style={{ padding: 20, height: 400 }}>
+      <label>
+        <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} />{' '}
+        readOnly
+      </label>
+      <Gantt
+        defaultTasks={milestoneTasks.map((t) => (t.id === '1' ? { ...t, locked: true } : t))}
+        readOnly={readOnly}
+        markers={[
+          { date: '2026-04-08', label: 'Code freeze' },
+          { date: '2026-04-20', label: 'Release', color: 'green' },
+        ]}
+      />
+    </div>
+  );
+}
+
 export function AutoSchedule() {
   const chainTasks: GanttTask[] = [
     { id: '1', label: 'Foundation', startDate: '2026-05-04', duration: 5, progress: 100 },

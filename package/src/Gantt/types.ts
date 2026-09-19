@@ -11,6 +11,16 @@ export interface GanttColumn {
   width?: number;
 }
 
+/** A vertical line marking a date on the timeline (deadline, release, sprint end) */
+export interface GanttMarker {
+  /** Date in ISO format (YYYY-MM-DD); markers outside the timeline are not rendered */
+  date: string;
+  /** Label shown at the top of the line */
+  label?: ReactNode;
+  /** Line and label color, default `orange` */
+  color?: MantineColor;
+}
+
 /** Represents a single task in the Gantt chart */
 export interface GanttTask {
   /** Unique identifier for the task */
@@ -35,6 +45,11 @@ export interface GanttTask {
   color?: MantineColor;
   /** Id of the parent task; a task that has children renders as a summary bar */
   parentId?: string;
+  /**
+   * Freeze this task's schedule: no drag, resize, keyboard nudge or outgoing link. It can
+   * still be a link target, and `autoSchedule` still shifts it to keep successors valid.
+   */
+  locked?: boolean;
   /** Planned (baseline) schedule to compare against the actual bar */
   baseline?: {
     /** Baseline start date in ISO format (YYYY-MM-DD) */
@@ -82,6 +97,8 @@ export type GanttStylesNames =
   | 'majorGridLine'
   | 'weekendBackground'
   | 'todayLine'
+  | 'marker'
+  | 'markerLabel'
   | 'taskBar'
   | 'taskBarLabel'
   | 'taskBarProgress'
@@ -247,6 +264,16 @@ export interface GanttBaseProps {
    * <br>Default: `true`
    */
   showDragLabel?: boolean;
+
+  /** Extra vertical date lines next to the today marker */
+  markers?: GanttMarker[];
+
+  /**
+   * Disable every edit: drag, resize, linking, link deletion and keyboard nudges. Clicks,
+   * selection, expand/collapse, scrolling and zoom keep working.
+   * <br>Default: `false`
+   */
+  readOnly?: boolean;
 
   /** Id of the selected task - its bar and list row get `data-selected` */
   selectedTaskId?: string | null;

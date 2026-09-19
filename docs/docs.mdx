@@ -86,6 +86,37 @@ Click a dependency arrow to delete that link. The component removes the source i
 target's `dependencies` and fires `onLinkDelete(fromTaskId, toTaskId)` alongside `onTasksChange`,
 mirroring how link creation works.
 
+## Markers
+
+`markers` draws extra vertical lines next to the today marker: a deadline, a release, a sprint
+end. Each takes a `date` (`YYYY-MM-DD`), an optional `label` and a `color` (default `orange`).
+A marker outside the timeline is not rendered and does not widen it - set `startDate` / `endDate`
+if it has to be visible.
+
+<Demo data={demos.markers} />
+
+## Read-only and locked tasks
+
+`readOnly` turns off every edit: drag, resize, linking, link deletion and keyboard nudges.
+`onTaskClick`, selection, expand/collapse, scrolling and zoom keep working. To freeze a single
+task, set `locked: true` on it. A locked task can still be the target of a new link, and
+`autoSchedule` still shifts it, because a successor that starts before its predecessor ends would
+make the chart lie.
+
+To reject or clamp a single change instead, use controlled mode and decide in `onTasksChange`:
+
+```tsx
+<Gantt
+  tasks={tasks}
+  onTasksChange={(next) => {
+    // no task may start before the project kickoff
+    if (next.every((task) => task.startDate >= '2026-04-01')) {
+      setTasks(next);
+    }
+  }}
+/>
+```
+
 ## Controlled and uncontrolled
 
 Pass `defaultTasks` and the component owns the task list (uncontrolled) - this is what the demos

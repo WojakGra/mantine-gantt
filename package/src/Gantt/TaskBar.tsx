@@ -23,6 +23,8 @@ interface TaskBarProps {
   isCritical?: boolean;
   /** True when this task has children and renders as a non-interactive summary bar. */
   isSummary?: boolean;
+  /** True when the chart is `readOnly` or the task is `locked`: the bar takes no edits. */
+  isLocked?: boolean;
   /** Show a Mantine Tooltip with the task's schedule on hover. */
   showTooltip?: boolean;
   /** Show the snapped schedule readout while this bar is dragged. */
@@ -47,6 +49,7 @@ function TaskBarComponent({
   isLinkTarget,
   isCritical,
   isSummary,
+  isLocked,
   isSelected,
   showTooltip,
   showDragLabel = true,
@@ -62,6 +65,8 @@ function TaskBarComponent({
   const formatTaskDate = (date: string | Dayjs) => formatDate(date, locale);
 
   const isMilestone = task.type === 'milestone';
+  // Summary and locked bars take no edits: no drag, handles, connector or keyboard nudge.
+  const inert = isSummary || isLocked;
   // Milestones are zero-length markers rendered as a fixed-size diamond.
   const baseLeft = dateToPixel(task.startDate, startDate, columnWidth);
   const baseWidth = isMilestone ? columnWidth : durationToPixels(task.duration, columnWidth);
@@ -120,21 +125,24 @@ function TaskBarComponent({
       data-link-target={isLinkTarget || undefined}
       data-critical={isCritical || undefined}
       data-summary={isSummary || undefined}
+      data-locked={isLocked || undefined}
       data-milestone={isMilestone || undefined}
       data-selected={isSelected || undefined}
       aria-label={
         isSummary
           ? `${task.label}, summary, starts ${task.startDate}, ${task.duration} day duration.`
           : isMilestone
-            ? `${task.label}, milestone, ${task.startDate}. Arrow keys move.`
-            : `${task.label}, starts ${task.startDate}, ${task.duration} day duration. Arrow keys move, Shift+Arrow resize.`
+            ? `${task.label}, milestone, ${task.startDate}.${isLocked ? '' : ' Arrow keys move.'}`
+            : `${task.label}, starts ${task.startDate}, ${task.duration} day duration.${
+                isLocked ? '' : ' Arrow keys move, Shift+Arrow resize.'
+              }`
       }
       style={{
         left: visualLeft,
         width: visualWidth,
         ['--task-bar-color' as string]: barColor,
       }}
-      onPointerDown={isSummary ? undefined : (e) => startDrag('move', task.id, e)}
+      onPointerDown={inert ? undefined : (e) => startDrag('move', task.id, e)}
       onClick={() => {
         if (didDrag()) {
           return;
@@ -145,10 +153,10 @@ function TaskBarComponent({
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onTaskClick?.(task);
-        } else if (e.key === 'ArrowLeft' && !isSummary) {
+        } else if (e.key === 'ArrowLeft' && !inert) {
           e.preventDefault();
           nudge(task.id, e.shiftKey && !isMilestone ? 'resize' : 'move', -1);
-        } else if (e.key === 'ArrowRight' && !isSummary) {
+        } else if (e.key === 'ArrowRight' && !inert) {
           e.preventDefault();
           nudge(task.id, e.shiftKey && !isMilestone ? 'resize' : 'move', 1);
         }
@@ -166,7 +174,7 @@ function TaskBarComponent({
       {isMilestone && <div {...getStyles('milestone')} aria-hidden="true" />}
 
       {/* Left resize handle */}
-      {!isSummary && !isMilestone && (
+      {!inert && !isMilestone && (
         <div
           {...getStyles('resizeHandleLeft')}
           aria-hidden="true"
@@ -183,7 +191,7 @@ function TaskBarComponent({
       {!isMilestone && <span {...getStyles('taskBarLabel')}>{task.label}</span>}
 
       {/* Right resize handle */}
-      {!isSummary && !isMilestone && (
+      {!inert && !isMilestone && (
         <div
           {...getStyles('resizeHandle')}
           aria-hidden="true"
@@ -198,7 +206,7 @@ function TaskBarComponent({
       )}
 
       {/* Link connector (right side) */}
-      {!isSummary && (
+      {!inert && (
         <div
           {...getStyles('linkConnector')}
           aria-hidden="true"
@@ -237,6 +245,7 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.isCritical === nextProps.isCritical &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.isSummary === nextProps.isSummary &&
+    prevProps.isLocked === nextProps.isLocked &&
     prevProps.showTooltip === nextProps.showTooltip &&
     prevProps.showDragLabel === nextProps.showDragLabel &&
     prevProps.dragType === nextProps.dragType &&

@@ -897,3 +897,88 @@ describe('tooltips', () => {
     expect(row).not.toHaveAttribute('title');
   });
 });
+
+describe('readOnly / locked', () => {
+  it('readOnly renders no resize handles or link connectors', () => {
+    const { container } = render(<Gantt tasks={mockTasks} readOnly />);
+    expect(container.querySelector('[class*="resizeHandle"]')).toBeNull();
+    expect(container.querySelector('[class*="linkConnector"]')).toBeNull();
+    expect(container.querySelectorAll('[data-locked]').length).toBe(3);
+  });
+
+  it('readOnly ignores pointer drags and keyboard nudges', () => {
+    const onTasksChange = jest.fn();
+    const { container } = render(
+      <Gantt defaultTasks={mockTasks} onTasksChange={onTasksChange} readOnly />
+    );
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    pointer(bar, 'pointerdown', 100);
+    pointer(document, 'pointermove', 140);
+    pointer(document, 'pointerup', 140);
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+
+    expect(onTasksChange).not.toHaveBeenCalled();
+  });
+
+  it('readOnly does not delete a link on click', () => {
+    const onLinkDelete = jest.fn();
+    const { container } = render(
+      <Gantt defaultTasks={mockTasks} onLinkDelete={onLinkDelete} readOnly />
+    );
+    fireEvent.click(container.querySelector('path[class*="dependencyLine"]')!);
+    expect(onLinkDelete).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('path[class*="dependencyLine"]').length).toBeGreaterThan(0);
+  });
+
+  it('readOnly still fires onTaskClick', () => {
+    const onTaskClick = jest.fn();
+    const { container } = render(<Gantt tasks={mockTasks} onTaskClick={onTaskClick} readOnly />);
+    fireEvent.click(container.querySelector('[data-task-id="1"]')!);
+    expect(onTaskClick).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }));
+  });
+
+  it('a locked task is inert while its neighbours stay editable', () => {
+    const onTaskUpdate = jest.fn();
+    const tasks = mockTasks.map((t) => (t.id === '1' ? { ...t, locked: true } : t));
+    const { container } = render(<Gantt defaultTasks={tasks} onTaskUpdate={onTaskUpdate} />);
+    const locked = container.querySelector('[data-task-id="1"]')!;
+    const free = container.querySelector('[data-task-id="2"]')!;
+
+    expect(locked).toHaveAttribute('data-locked');
+    expect(free).not.toHaveAttribute('data-locked');
+    expect(locked.querySelector('[class*="resizeHandle"]')).toBeNull();
+
+    fireEvent.keyDown(locked, { key: 'ArrowRight' });
+    expect(onTaskUpdate).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(free, { key: 'ArrowRight' });
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '2', startDate: '2026-02-04' })
+    );
+  });
+});
+
+describe('markers', () => {
+  it('renders a marker line at its date with a label', () => {
+    const { container } = render(
+      <Gantt
+        tasks={mockTasks}
+        startDate={new Date(2026, 0, 25)}
+        columnWidth={40}
+        markers={[{ date: '2026-02-01', label: 'Release' }]}
+      />
+    );
+    const marker = container.querySelector('[class*="mantine-Gantt-marker"]');
+    // Feb 1 is 7 days after the Jan 25 timeline start.
+    expect(marker).toHaveStyle({ left: '280px' });
+    expect(screen.getByText('Release')).toBeInTheDocument();
+  });
+
+  it('skips markers outside the timeline', () => {
+    const { container } = render(
+      <Gantt tasks={mockTasks} markers={[{ date: '2020-01-01', label: 'Ancient' }]} />
+    );
+    expect(container.querySelector('[class*="mantine-Gantt-marker"]')).toBeNull();
+  });
+});

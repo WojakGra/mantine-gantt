@@ -4,6 +4,7 @@ export type {
   GanttProps,
   GanttTask,
   GanttColumn,
+  GanttMarker,
   GanttStylesNames,
   GanttFactory,
   GanttCssVariables,

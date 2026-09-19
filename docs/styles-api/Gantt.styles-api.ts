@@ -26,6 +26,8 @@ export const GanttStylesApi: StylesApiData<GanttFactory> = {
     majorGridLine: 'Major grid line',
     weekendBackground: 'Weekend background',
     todayLine: 'Today marker line',
+    marker: 'Custom date marker line (`markers` prop)',
+    markerLabel: 'Label at the top of a marker line',
     taskBar: 'Task bar',
     taskBarLabel: 'Task bar label',
     taskBarProgress: 'Task bar progress',
