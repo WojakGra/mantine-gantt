@@ -10,6 +10,7 @@ export const GanttStylesApi: StylesApiData<GanttFactory> = {
     taskListContent: 'Task list rows sizer (full list height, virtualization offset)',
     taskListRow: 'Task list row',
     taskListCell: 'Task list cell',
+    taskListToggle: 'Button collapsing/expanding the task list panel',
     expandChevron: 'Chevron toggling a parent row',
     timeline: 'Timeline wrapper',
     timelineHeader: 'Timeline header',
