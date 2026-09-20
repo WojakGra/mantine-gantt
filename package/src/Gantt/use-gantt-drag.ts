@@ -14,6 +14,10 @@ const EDGE_THRESHOLD = 50;
 const MAX_SCROLL_SPEED = 12;
 // Pointer must travel this far before a drag begins, so a plain click still fires onTaskClick.
 const DRAG_ACTIVATION_DISTANCE = 5;
+// Touch/pen: a swipe over a bar pans the timeline natively; holding still this long arms the
+// drag instead. Moving further than the tolerance before that means "pan", so we bail out.
+const LONG_PRESS_MS = 300;
+const LONG_PRESS_TOLERANCE = 10;
 
 /** Id of the task bar under a client point, via the DOM (`data-task-id`). */
 function taskIdAt(clientX: number, clientY: number): string | null {
@@ -57,10 +61,13 @@ interface DragRef {
   type: GanttDragType;
   taskId: string;
   startClientX: number;
+  startClientY: number;
   startScrollLeft: number;
   lastClientX: number;
   lastClientY: number;
   moved: boolean;
+  /** Touch/pen pointer: activates by long-press, not by distance. */
+  touch: boolean;
 }
 
 export interface UseGanttDragReturn {
@@ -93,6 +100,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
   const rafRef = useRef<number | null>(null);
   const scrollVec = useRef({ x: 0, y: 0 });
   const didDragRef = useRef(false);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopAutoScroll = useCallback(() => {
     if (rafRef.current !== null) {
@@ -195,6 +203,16 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       }
       // Enforce the activation threshold so a click without real movement is not a drag.
       if (!drag.moved) {
+        if (drag.touch) {
+          // Not armed yet: real movement is a pan, not a drag.
+          if (
+            Math.hypot(e.clientX - drag.startClientX, e.clientY - drag.startClientY) >
+            LONG_PRESS_TOLERANCE
+          ) {
+            endDragRef.current(false);
+          }
+          return;
+        }
         if (Math.abs(e.clientX - drag.startClientX) < DRAG_ACTIVATION_DISTANCE) {
           return;
         }
@@ -296,6 +314,10 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
   }, []);
 
   const detach = useCallback(() => {
+    if (longPressRef.current !== null) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
     document.removeEventListener('pointermove', handlePointerMove);
     document.removeEventListener('pointerup', handlePointerUp);
     document.removeEventListener('pointercancel', handlePointerUp);
@@ -353,11 +375,28 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
         type,
         taskId,
         startClientX: event.clientX,
+        startClientY: event.clientY,
         startScrollLeft: body ? body.scrollLeft : 0,
         lastClientX: event.clientX,
         lastClientY: event.clientY,
         moved: false,
+        touch: event.pointerType === 'touch' || event.pointerType === 'pen',
       };
+      if (dragRef.current.touch) {
+        longPressRef.current = setTimeout(() => {
+          longPressRef.current = null;
+          const drag = dragRef.current;
+          if (!drag) {
+            return;
+          }
+          drag.moved = true;
+          didDragRef.current = true;
+          document.body.style.userSelect = 'none';
+          navigator.vibrate?.(10);
+          // Publish the (zero-delta) drag state so the bar shows it is armed.
+          recompute();
+        }, LONG_PRESS_MS);
+      }
       document.addEventListener('pointermove', handlePointerMove);
       document.addEventListener('pointerup', handlePointerUp);
       // pointercancel: the OS/browser can take the gesture over (touch scrolling, alerts) -
@@ -365,8 +404,24 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       document.addEventListener('pointercancel', handlePointerUp);
       document.addEventListener('keydown', handleKeyDown);
     },
-    [handlePointerMove, handlePointerUp, handleKeyDown]
+    [handlePointerMove, handlePointerUp, handleKeyDown, recompute]
   );
+
+  // An armed touch drag must stop the browser from panning. The listener has to exist before
+  // the gesture starts: iOS Safari ignores preventDefault from one added after touchstart.
+  useEffect(() => {
+    const content = optsRef.current.contentRef.current;
+    if (!content) {
+      return undefined;
+    }
+    const blockPan = (e: TouchEvent) => {
+      if (dragRef.current?.moved) {
+        e.preventDefault();
+      }
+    };
+    content.addEventListener('touchmove', blockPan, { passive: false });
+    return () => content.removeEventListener('touchmove', blockPan);
+  }, []);
 
   const didDrag = useCallback(() => didDragRef.current, []);
 

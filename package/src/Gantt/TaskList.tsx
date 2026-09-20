@@ -32,6 +32,8 @@ interface TaskListProps {
   contentHeight: number;
   selectedTaskId?: string | null;
   locale: string;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }
 
 export function TaskList({
@@ -46,13 +48,15 @@ export function TaskList({
   contentHeight,
   selectedTaskId,
   locale,
+  collapsed,
+  onToggleCollapsed,
 }: TaskListProps) {
   // Flex the first flexible column, fix the rest to their width. Set inline because the
   // column set is runtime data - same pattern as the timeline's inline geometry.
   const gridTemplateColumns = columns.map((c) => (c.width ? `${c.width}px` : '1fr')).join(' ');
 
   return (
-    <div {...getStyles('taskList')}>
+    <div {...getStyles('taskList')} data-collapsed={collapsed || undefined}>
       {/* Header */}
       <div {...getStyles('taskListHeader')} style={{ gridTemplateColumns }}>
         {columns.map((col, i) => (
@@ -60,6 +64,22 @@ export function TaskList({
             {col.header}
           </div>
         ))}
+        <button
+          type="button"
+          {...getStyles('taskListToggle')}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand task list' : 'Collapse task list'}
+          onClick={onToggleCollapsed}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+            <polyline
+              points="6.5,2 3.5,5 6.5,8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+          </svg>
+        </button>
       </div>
 
       {/* Body */}
