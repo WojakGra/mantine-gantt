@@ -108,6 +108,7 @@ export type GanttStylesNames =
   | 'taskListContent'
   | 'taskListRow'
   | 'taskListCell'
+  | 'taskListToggle'
   | 'expandChevron'
   | 'timeline'
   | 'timelineHeader'
@@ -204,6 +205,22 @@ export interface GanttBaseProps {
    * width is clamped so the columns never overflow the panel.
    */
   taskListWidth?: number;
+
+  /**
+   * Collapsed state of the task list panel (controlled). Collapsed, the panel shrinks to a
+   * narrow strip with the toggle button so the timeline gets the full width.
+   */
+  taskListCollapsed?: boolean;
+
+  /**
+   * Initial collapsed state (uncontrolled). Omitted: the panel follows the container width -
+   * collapsed while the chart is too narrow to fit the list plus a usable timeline (phones),
+   * until the user toggles it. Pass `false` to opt out of that.
+   */
+  defaultTaskListCollapsed?: boolean;
+
+  /** Called when the user toggles the task list panel */
+  onTaskListCollapsedChange?: (collapsed: boolean) => void;
 
   /**
    * Start date of the timeline, defaults to earliest task start - 7 days.

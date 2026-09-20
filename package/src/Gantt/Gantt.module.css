@@ -15,11 +15,34 @@
    ============================================ */
 .taskList {
   width: var(--gantt-task-list-width, 320px);
-  min-width: var(--gantt-task-list-width, 320px);
+  /* Never wider than the chart: on a phone the expanded list fills the screen instead of
+     pushing its own toggle button out of view. */
+  min-width: min(var(--gantt-task-list-width, 320px), 100%);
+  max-width: 100%;
+  /* Squeezed below its natural width, the list scrolls sideways instead of crushing columns. */
+  overflow-x: auto;
+  scrollbar-width: none;
   border-right: 1px solid var(--mantine-color-default-border);
   display: flex;
   flex-direction: column;
   background-color: var(--mantine-color-body);
+}
+
+/* Collapsed: a narrow strip with the toggle button; row lines stay so it still reads as
+   the list, and the body stays mounted so scroll sync keeps working. */
+.taskList[data-collapsed] {
+  width: 32px;
+  min-width: 32px;
+  /* Not a scroll container: a sideways swipe cannot slide the toggle out of the strip. */
+  overflow-x: clip;
+}
+
+.taskList:not([data-collapsed]) > * {
+  min-width: var(--gantt-task-list-width, 320px);
+}
+
+.taskList[data-collapsed] .taskListCell {
+  display: none;
 }
 
 .taskListHeader {
@@ -75,7 +98,7 @@
   white-space: nowrap;
 }
 
-.taskListCell:last-child {
+.taskListCell:last-of-type {
   border-right: none;
 }
 
@@ -87,6 +110,37 @@
 .taskListCell:not(:first-child) {
   font-size: var(--mantine-font-size-xs);
   color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
+}
+
+/* Room for the absolutely positioned toggle button. */
+.taskListHeader .taskListCell:first-child {
+  padding-left: 32px;
+}
+
+.taskListToggle {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--mantine-radius-sm);
+  background: none;
+  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
+  cursor: pointer;
+}
+
+.taskListToggle:hover {
+  background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+}
+
+.taskListToggle[aria-expanded='false'] svg {
+  transform: rotate(180deg);
 }
 
 .expandChevron {
@@ -307,7 +361,9 @@
   box-shadow: var(--mantine-shadow-xs);
   overflow: visible;
   user-select: none;
-  touch-action: none;
+  -webkit-touch-callout: none;
+  /* Touch pans the timeline natively; a drag starts only after a long-press (use-gantt-drag). */
+  touch-action: manipulation;
   z-index: 10;
   will-change: left, width, transform;
 }
@@ -456,7 +512,7 @@
   background: linear-gradient(to right, transparent, rgb(0, 0, 0, 0.1));
   /* Above the label (z-index 1), which otherwise covers the handle on short bars. */
   z-index: 2;
-  touch-action: none;
+  touch-action: manipulation;
 }
 
 .taskBar:hover .resizeHandle {
@@ -485,7 +541,7 @@
   transition: opacity 150ms ease;
   background: linear-gradient(to left, transparent, rgb(0, 0, 0, 0.1));
   z-index: 2;
-  touch-action: none;
+  touch-action: manipulation;
 }
 
 .taskBar:hover .resizeHandleLeft {
@@ -519,7 +575,7 @@
     opacity 150ms ease,
     transform 150ms ease;
   z-index: 30;
-  touch-action: none;
+  touch-action: manipulation;
 }
 
 .taskBar:hover .linkConnector {

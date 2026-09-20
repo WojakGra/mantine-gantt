@@ -6,10 +6,16 @@ import { Gantt, GanttTask } from './index';
 // jsdom has no PointerEvent, so fireEvent.pointer* drops clientX. Dispatch a plain bubbling
 // Event with clientX attached - React reads nativeEvent.clientX and native listeners read it too.
 // Wrapped in act() so the resulting state updates (and onTaskUpdate) flush before assertions.
-function pointer(node: Element | Document, type: string, clientX: number) {
+function pointer(
+  node: Element | Document,
+  type: string,
+  clientX: number,
+  pointerType?: string,
+  pointerId = 1
+) {
   act(() => {
     const event = new Event(type, { bubbles: true, cancelable: true });
-    Object.assign(event, { clientX, clientY: 100 });
+    Object.assign(event, { clientX, clientY: 100, pointerType, pointerId });
     node.dispatchEvent(event);
   });
 }
@@ -518,6 +524,101 @@ describe('task list width', () => {
     // Fixed columns alone are 260px; flexible Task Name keeps a 100px floor.
     const { container } = render(<Gantt tasks={mockTasks} taskListWidth={240} />);
     expect(width(container)).toBe('360px');
+  });
+});
+
+describe('collapsible task list', () => {
+  const list = (container: HTMLElement) => container.querySelector('[class*="taskList"]')!;
+
+  it('toggles from the header button', () => {
+    const onChange = jest.fn();
+    const { container } = render(<Gantt tasks={mockTasks} onTaskListCollapsedChange={onChange} />);
+    expect(list(container)).not.toHaveAttribute('data-collapsed');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse task list' }));
+    expect(list(container)).toHaveAttribute('data-collapsed');
+    expect(onChange).toHaveBeenLastCalledWith(true);
+
+    const expand = screen.getByRole('button', { name: 'Expand task list' });
+    expect(expand).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(expand);
+    expect(list(container)).not.toHaveAttribute('data-collapsed');
+    expect(onChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('starts collapsed with defaultTaskListCollapsed', () => {
+    const { container } = render(<Gantt tasks={mockTasks} defaultTaskListCollapsed />);
+    expect(list(container)).toHaveAttribute('data-collapsed');
+  });
+
+  it('controlled: reports the toggle but keeps the prop value', () => {
+    const onChange = jest.fn();
+    const { container } = render(
+      <Gantt tasks={mockTasks} taskListCollapsed={false} onTaskListCollapsedChange={onChange} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse task list' }));
+    expect(onChange).toHaveBeenCalledWith(true);
+    expect(list(container)).not.toHaveAttribute('data-collapsed');
+  });
+});
+
+describe('touch drag (long-press)', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('a touch swipe over a bar does not drag it', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={mockTasks} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    pointer(bar, 'pointerdown', 100, 'touch');
+    pointer(document, 'pointermove', 140, 'touch');
+    act(() => {
+      jest.advanceTimersByTime(500);
+    });
+    pointer(document, 'pointermove', 180, 'touch');
+    pointer(document, 'pointerup', 180, 'touch');
+
+    expect(onTaskUpdate).not.toHaveBeenCalled();
+  });
+
+  it('a long-press arms the drag', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={mockTasks} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    pointer(bar, 'pointerdown', 100, 'touch');
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    pointer(document, 'pointermove', 140, 'touch');
+    pointer(document, 'pointerup', 140, 'touch');
+
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', startDate: '2026-02-02' })
+    );
+  });
+
+  it('a second finger cannot move or release the drag', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={mockTasks} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    pointer(bar, 'pointerdown', 100, 'touch', 1);
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    pointer(container.querySelector('[data-task-id="2"]')!, 'pointerdown', 300, 'touch', 2);
+    pointer(document, 'pointermove', 300, 'touch', 2);
+    pointer(document, 'pointerup', 300, 'touch', 2);
+    expect(onTaskUpdate).not.toHaveBeenCalled();
+
+    pointer(document, 'pointermove', 140, 'touch', 1);
+    pointer(document, 'pointerup', 140, 'touch', 1);
+    expect(onTaskUpdate).toHaveBeenCalledTimes(1);
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', startDate: '2026-02-02' })
+    );
   });
 });
 

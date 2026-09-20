@@ -10,7 +10,7 @@ import {
   useStyles,
   VisuallyHidden,
 } from '@mantine/core';
-import { useUncontrolled } from '@mantine/hooks';
+import { useMergedRef, useUncontrolled } from '@mantine/hooks';
 import { DependencyLinks } from './DependencyLinks';
 import { TaskBar } from './TaskBar';
 import { defaultColumns, TaskList } from './TaskList';
@@ -42,6 +42,9 @@ import classes from './Gantt.module.css';
 // Right-side room kept ahead of the dragged bar; the END grows dynamically by this much
 // so dragging into the future is effectively unbounded.
 const DRAG_BUFFER_DAYS = 30;
+
+// Below task list width + this much, the task list starts collapsed (phones in portrait).
+const MIN_TIMELINE_WIDTH = 240;
 
 // Stable empty set so the reference doesn't change on every render when the feature is off.
 const EMPTY_CRITICAL = new Set<string>();
@@ -114,6 +117,9 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     columnWidth = 40,
     rowHeight = 44,
     taskListWidth,
+    taskListCollapsed,
+    defaultTaskListCollapsed,
+    onTaskListCollapsedChange,
     showTitle,
     showTodayMarker,
     autoSchedule,
@@ -236,11 +242,24 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [scrollTop, setScrollTop] = useState(0);
 
+  // Task list collapse: the user's (or consumer's) choice wins; until there is one, follow
+  // the container width so a phone starts on the timeline instead of a clipped list.
+  const [narrow, setNarrow] = useState(false);
+  const [collapsedChoice, setCollapsedChoice] = useUncontrolled<boolean | undefined>({
+    value: taskListCollapsed,
+    defaultValue: defaultTaskListCollapsed,
+    onChange: onTaskListCollapsedChange as (value: boolean | undefined) => void,
+  });
+  const listCollapsed = collapsedChoice ?? narrow;
+  const listWidth = resolveTaskListWidth(taskListWidth, columns);
+
   // Refs for scroll synchronization
   const timelineBodyRef = useRef<HTMLDivElement>(null);
   const taskListBodyRef = useRef<HTMLDivElement>(null);
   const timelineHeaderRef = useRef<HTMLDivElement>(null);
   const timelineContentRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const mergedRootRef = useMergedRef(ref, rootRef);
 
   // All drag interactions (move / resize / link) on plain pointer events - no @dnd-kit.
   const drag = useGanttDrag({
@@ -349,23 +368,36 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     }
   }, []);
 
-  // Measure the timeline body so the grid can be widened to fill the viewport.
+  // Measure the timeline body so the grid can be widened to fill the viewport, and the root
+  // to tell whether the task list still leaves room for a usable timeline.
   useEffect(() => {
     const node = timelineBodyRef.current;
-    if (!node) {
+    const root = rootRef.current;
+    if (!node || !root) {
       return undefined;
     }
     setViewport({ width: node.clientWidth, height: node.clientHeight });
+    // clientWidth is 0 before layout (and always in jsdom) - that is "unknown", not narrow.
+    const measureRoot = (width: number) =>
+      setNarrow(width > 0 && width < listWidth + MIN_TIMELINE_WIDTH);
+    measureRoot(root.clientWidth);
     if (typeof ResizeObserver === 'undefined') {
       return undefined;
     }
     const observer = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      setViewport({ width, height });
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (entry.target === root) {
+          measureRoot(width);
+        } else {
+          setViewport({ width, height });
+        }
+      }
     });
     observer.observe(node);
+    observer.observe(root);
     return () => observer.disconnect();
-  }, []);
+  }, [listWidth]);
 
   // Ctrl+wheel zooms the day column width around the cursor. Native listener because React's
   // wheel handler is passive and cannot preventDefault the browser's page zoom.
@@ -575,7 +607,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     showTodayMarker && today.isAfter(bounds.start) && today.isBefore(displayEnd);
 
   return (
-    <Box ref={ref} {...getStyles('root')} {...others}>
+    <Box ref={mergedRootRef} {...getStyles('root')} {...others}>
       {/* Left Pane - Task List */}
       <TaskList
         rows={visibleRows}
@@ -589,6 +621,8 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
         offsetTop={firstRow * rowHeight}
         contentHeight={rows.length * rowHeight}
         selectedTaskId={selectedTaskId}
+        collapsed={listCollapsed}
+        onToggleCollapsed={() => setCollapsedChoice(!listCollapsed)}
       />
 
       {/* Right Pane - Timeline */}

@@ -54,6 +54,16 @@ still snap to whole days. `weekStart` controls the header's week numbering and t
 
 <Demo data={demos.navigation} />
 
+## Phones and narrow containers
+
+- The button in the task list header collapses the panel to a narrow strip, giving the timeline
+  the full width (task names stay readable on the bars). While the chart is narrower than the
+  task list plus 240px - a phone in portrait - the panel starts collapsed and follows the
+  container width until the user toggles it. `defaultTaskListCollapsed={false}` opts out;
+  `taskListCollapsed` + `onTaskListCollapsedChange` make it controlled.
+- On touch screens a swipe always pans the timeline, even when it starts on a bar. To move,
+  resize or link a task, press and hold the bar (or a handle) for 300ms, then drag.
+
 ## Critical path & baselines
 
 `highlightCriticalPath` runs CPM over the dependency graph and paints the zero-slack tasks and
