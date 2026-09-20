@@ -33,6 +33,8 @@
 .taskList[data-collapsed] {
   width: 32px;
   min-width: 32px;
+  /* Not a scroll container: a sideways swipe cannot slide the toggle out of the strip. */
+  overflow-x: clip;
 }
 
 .taskList:not([data-collapsed]) > * {

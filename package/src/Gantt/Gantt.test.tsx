@@ -6,10 +6,16 @@ import { Gantt, GanttTask } from './index';
 // jsdom has no PointerEvent, so fireEvent.pointer* drops clientX. Dispatch a plain bubbling
 // Event with clientX attached - React reads nativeEvent.clientX and native listeners read it too.
 // Wrapped in act() so the resulting state updates (and onTaskUpdate) flush before assertions.
-function pointer(node: Element | Document, type: string, clientX: number, pointerType?: string) {
+function pointer(
+  node: Element | Document,
+  type: string,
+  clientX: number,
+  pointerType?: string,
+  pointerId = 1
+) {
   act(() => {
     const event = new Event(type, { bubbles: true, cancelable: true });
-    Object.assign(event, { clientX, clientY: 100, pointerType });
+    Object.assign(event, { clientX, clientY: 100, pointerType, pointerId });
     node.dispatchEvent(event);
   });
 }
@@ -588,6 +594,28 @@ describe('touch drag (long-press)', () => {
     pointer(document, 'pointermove', 140, 'touch');
     pointer(document, 'pointerup', 140, 'touch');
 
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', startDate: '2026-02-02' })
+    );
+  });
+
+  it('a second finger cannot move or release the drag', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt tasks={mockTasks} onTaskUpdate={onTaskUpdate} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+
+    pointer(bar, 'pointerdown', 100, 'touch', 1);
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    pointer(container.querySelector('[data-task-id="2"]')!, 'pointerdown', 300, 'touch', 2);
+    pointer(document, 'pointermove', 300, 'touch', 2);
+    pointer(document, 'pointerup', 300, 'touch', 2);
+    expect(onTaskUpdate).not.toHaveBeenCalled();
+
+    pointer(document, 'pointermove', 140, 'touch', 1);
+    pointer(document, 'pointerup', 140, 'touch', 1);
+    expect(onTaskUpdate).toHaveBeenCalledTimes(1);
     expect(onTaskUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ id: '1', startDate: '2026-02-02' })
     );

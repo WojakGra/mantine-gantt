@@ -60,6 +60,8 @@ export interface UseGanttDragOptions {
 interface DragRef {
   type: GanttDragType;
   taskId: string;
+  /** Pointer that owns the drag; events from any other pointer (a second finger) are ignored. */
+  pointerId: number;
   startClientX: number;
   startClientY: number;
   startScrollLeft: number;
@@ -198,7 +200,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
   const handlePointerMove = useCallback(
     (e: PointerEvent) => {
       const drag = dragRef.current;
-      if (!drag) {
+      if (!drag || e.pointerId !== drag.pointerId) {
         return;
       }
       // Enforce the activation threshold so a click without real movement is not a drag.
@@ -305,7 +307,11 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
     }
   }, []);
 
-  const handlePointerUp = useCallback(() => endDragRef.current(true), []);
+  const handlePointerUp = useCallback((e: PointerEvent) => {
+    if (e.pointerId === dragRef.current?.pointerId) {
+      endDragRef.current(true);
+    }
+  }, []);
   // Escape cancels the drag: the bar snaps back and nothing is committed.
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -370,10 +376,15 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
         return;
       }
       event.stopPropagation();
+      // A second finger landing on a bar must not replace the drag already in progress.
+      if (dragRef.current) {
+        return;
+      }
       const body = optsRef.current.bodyRef.current;
       dragRef.current = {
         type,
         taskId,
+        pointerId: event.pointerId,
         startClientX: event.clientX,
         startClientY: event.clientY,
         startScrollLeft: body ? body.scrollLeft : 0,
