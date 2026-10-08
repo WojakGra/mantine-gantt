@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in mantine-gantt doesn't work as expected
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting a bug. Please fill in as much as you can, because a reproduction is the fastest way to a fix.
+  - type: input
+    id: version
+    attributes:
+      label: mantine-gantt version
+      placeholder: e.g. 0.6.1
+    validations:
+      required: true
+  - type: input
+    id: mantine-version
+    attributes:
+      label: '@mantine/core version'
+      placeholder: e.g. 8.3.0
+    validations:
+      required: true
+  - type: input
+    id: react-version
+    attributes:
+      label: React version
+      placeholder: e.g. 19.1.0
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      placeholder: e.g. Chrome 140, macOS / Safari iOS 18
+  - type: input
+    id: repro
+    attributes:
+      label: Reproduction link
+      description: A minimal CodeSandbox, StackBlitz or repository
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Render a Gantt with ...
+        2. Drag task ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include errors, console output or screenshots if you have them.
+    validations:
+      required: true

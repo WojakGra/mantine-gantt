@@ -243,6 +243,10 @@ npm run test
 npm run build
 ```
 
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues as described in [SECURITY.md](SECURITY.md).
+
 ## License
 
 MIT © [WojakGra](https://github.com/WojakGra)
