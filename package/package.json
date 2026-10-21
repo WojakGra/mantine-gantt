@@ -3,7 +3,6 @@
   "version": "0.6.1",
   "description": "A gantt chart component for mantine",
   "homepage": "https://wojakgra.github.io/mantine-gantt",
-  "packageManager": "yarn@4.0.1",
   "license": "MIT",
   "author": "Jakub Wojdziak <jakub@wojak.works>",
   "keywords": [
@@ -30,8 +29,8 @@
   },
   "repository": "https://github.com/WojakGra/mantine-gantt.git",
   "peerDependencies": {
-    "@mantine/core": ">=7.0.0",
-    "@mantine/hooks": ">=7.0.0",
+    "@mantine/core": ">=9.0.0",
+    "@mantine/hooks": ">=9.0.0",
     "dayjs": "^1.11.10",
     "react": "^18.x || ^19.x",
     "react-dom": "^18.x || ^19.x"

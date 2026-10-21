@@ -37,10 +37,10 @@ Run the same checks CI runs:
 
 ```bash
 yarn build
-yarn test   # syncpack + prettier + typecheck + eslint/stylelint + jest
+yarn test   # syncpack + oxfmt + typecheck + oxlint/stylelint + jest
 ```
 
-If formatting fails, run `yarn prettier:write`. Prettier also sorts imports, so don't reorder them by hand.
+If formatting fails, run `yarn format:write`. oxfmt also sorts imports, so don't reorder them by hand.
 
 ## Guidelines
 

@@ -345,10 +345,7 @@ export type GanttFactory = Factory<{
 }>;
 
 export interface GanttProps
-  extends BoxProps,
-    StylesApiProps<GanttFactory>,
-    ElementProps<'div', 'onChange'>,
-    GanttBaseProps {}
+  extends BoxProps, StylesApiProps<GanttFactory>, ElementProps<'div', 'onChange'>, GanttBaseProps {}
 
 /** Kind of drag interaction driven by useGanttDrag */
 export type GanttDragType = 'move' | 'resize-end' | 'resize-start' | 'link';
