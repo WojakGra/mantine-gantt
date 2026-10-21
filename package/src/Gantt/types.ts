@@ -180,9 +180,10 @@ export interface GanttBaseProps {
   onLinkDelete?: (fromTaskId: string, toTaskId: string, type: GanttDependencyType) => void;
 
   /**
-   * Automatically push dependent tasks later when a task is moved or resized, so every
-   * dependency (any type, with its lag) still holds. Tasks are never pulled earlier; a
-   * dependency on a parent uses the span of its children.
+   * Automatically push dependent tasks later when a task is moved or resized, so their
+   * dependencies (any type, with lag) hold again. Tasks are never pulled earlier. Only leaf
+   * tasks move: a dependency on a parent uses the span of its children, while a parent's own
+   * dependencies (and a child's dependency on its own parent) are ignored.
    * <br>Default: `false`.
    */
   autoSchedule?: boolean;

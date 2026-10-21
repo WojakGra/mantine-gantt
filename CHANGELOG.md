@@ -3,6 +3,33 @@
 Breaking changes and migration notes per release. Everything else is in the
 [GitHub release history](https://github.com/WojakGra/mantine-gantt/releases).
 
+## 0.7.0
+
+### Breaking
+
+**Mantine 9 is required.** The peer range for `@mantine/core` and `@mantine/hooks` is now
+`>=9.0.0`. Upgrade Mantine first, or stay on 0.6.1.
+
+**Parent tasks no longer schedule from their own dates.** A parent renders the span of its
+children, and the exported utilities now agree with it:
+
+- `calculateTimelineBounds` skips a parent's own `startDate`/`duration`. A parent baseline still
+  counts.
+- `applyAutoSchedule` (and the `autoSchedule` prop) never moves a parent. A dependency on a
+  parent waits for the parent's children. A parent's own dependencies are ignored, and so is a
+  child's dependency on its own parent.
+
+If you read a parent's dates to place things on the timeline, compute them from its children.
+
+**The first render is virtualized.** Before the timeline is measured, the chart renders the
+first 35 rows (at the default 44px `rowHeight`) instead of every row. jsdom never measures,
+so a test that looks for a later row has to scroll the timeline body first.
+
+### Changed
+
+- Shrinking a one-day task with Shift+ArrowLeft and dragging a link that already exists are
+  now no-ops. They no longer fire `onTaskUpdate`, `onLinkCreate` or `onTasksChange`.
+
 ## 0.6.0
 
 ### Breaking

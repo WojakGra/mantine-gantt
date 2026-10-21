@@ -734,6 +734,21 @@ describe('applyAutoSchedule', () => {
       expect(result.find((x) => x.id === 'b')!.startDate).toBe('2026-03-09');
     });
 
+    it("a child's dependency on its own parent doesn't stall the cascade", () => {
+      const tasks = [
+        t('p'),
+        t('c', {
+          parentId: 'p',
+          startDate: '2026-03-10', // Mar 10–11
+          dependencies: [{ taskId: 'p', type: 'SS' }],
+        }),
+        t('d', { dependencies: ['c'], startDate: '2026-03-05' }),
+      ];
+      const result = applyAutoSchedule(tasks, 'c');
+      expect(result.find((x) => x.id === 'c')!.startDate).toBe('2026-03-10');
+      expect(result.find((x) => x.id === 'd')!.startDate).toBe('2026-03-12');
+    });
+
     it("never rewrites a parent's own dates for its own dependencies", () => {
       const tasks = [
         t('x'), // Mar 2–3

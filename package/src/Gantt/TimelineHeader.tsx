@@ -1,4 +1,4 @@
-import dayjs, { type Dayjs } from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import React, { useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
 import type { GanttFactory } from './types';
@@ -14,6 +14,8 @@ interface TimelineHeaderProps {
   weekStart: 0 | 1;
   locale: string;
   isNonWorkingDay?: (date: Date) => boolean;
+  /** `YYYY-MM-DD`; a prop so the memoized header follows the date after midnight */
+  today: string;
 }
 
 function TimelineHeaderComponent({
@@ -26,9 +28,8 @@ function TimelineHeaderComponent({
   weekStart,
   locale,
   isNonWorkingDay,
+  today,
 }: TimelineHeaderProps) {
-  const today = dayjs();
-
   const dayHeaders = useMemo(
     () => generateDayHeaders(startDate, endDate, isNonWorkingDay),
     [startDate, endDate, isNonWorkingDay]

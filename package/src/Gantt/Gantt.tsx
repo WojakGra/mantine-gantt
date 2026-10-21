@@ -172,12 +172,12 @@ export const Gantt = factory<GanttFactory>((_props) => {
 
   // The children are memoized, but getStyles is a new function on every render. They get a
   // wrapper that always calls the latest one and changes identity only with the Styles API
-  // inputs: a classNames/styles change re-renders them, a drag or scroll frame does not.
+  // inputs: a classNames/styles/theme change re-renders them, a drag or scroll frame does not.
   const getStylesRef = useRef(getStyles);
   getStylesRef.current = getStyles;
   const stableGetStyles = useCallback<typeof getStyles>(
     (...args) => getStylesRef.current(...args),
-    [classNames, styles, unstyled, vars, attributes]
+    [classNames, styles, unstyled, vars, attributes, theme]
   );
 
   // Calculate effective column width based on viewMode
@@ -506,8 +506,8 @@ export const Gantt = factory<GanttFactory>((_props) => {
     // One column of context to the left of the target.
     body.scrollLeft = dateToPixel(date, bounds.start, effectiveColumnWidth) - effectiveColumnWidth;
     if (rowIndex >= 0) {
-      // `body.clientHeight`, not `viewport.height`: on mount the measurement effect has not
-      // committed yet and the state is still 0.
+      // `body.clientHeight`, not `viewport.height`: on mount this render still holds the
+      // unmeasured state (0).
       body.scrollTop = Math.max(0, rowIndex * rowHeight - (body.clientHeight - rowHeight) / 2);
     }
     // Intentionally only re-runs when the target changes, not on every layout/row change.
@@ -551,6 +551,19 @@ export const Gantt = factory<GanttFactory>((_props) => {
     body.scrollTop += speed(pan.top - pan.y);
     pan.raf = requestAnimationFrame(autoScrollTick);
   }, []);
+  // On the document: until it captures, the pan's release can land outside the body.
+  const handlePanEnd = useCallback(function end() {
+    document.removeEventListener('pointerup', end);
+    document.removeEventListener('pointercancel', end);
+    if (panRef.current?.raf !== null && panRef.current?.raf !== undefined) {
+      cancelAnimationFrame(panRef.current.raf);
+    }
+    panRef.current = null;
+    document.body.style.userSelect = '';
+    if (timelineBodyRef.current) {
+      timelineBodyRef.current.style.cursor = '';
+    }
+  }, []);
   const handlePanStart = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const body = timelineBodyRef.current;
@@ -574,11 +587,13 @@ export const Gantt = factory<GanttFactory>((_props) => {
       }
       body.style.cursor = auto ? 'all-scroll' : 'grabbing';
       document.body.style.userSelect = 'none';
+      document.addEventListener('pointerup', handlePanEnd);
+      document.addEventListener('pointercancel', handlePanEnd);
       if (auto) {
         panRef.current.raf = requestAnimationFrame(autoScrollTick);
       }
     },
-    [autoScrollTick]
+    [autoScrollTick, handlePanEnd]
   );
   const handlePanMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const pan = panRef.current;
@@ -597,16 +612,6 @@ export const Gantt = factory<GanttFactory>((_props) => {
     }
     body.scrollLeft = pan.left - (e.clientX - pan.x);
     body.scrollTop = pan.top - (e.clientY - pan.y);
-  }, []);
-  const handlePanEnd = useCallback(() => {
-    if (panRef.current?.raf !== null && panRef.current?.raf !== undefined) {
-      cancelAnimationFrame(panRef.current.raf);
-    }
-    panRef.current = null;
-    document.body.style.userSelect = '';
-    if (timelineBodyRef.current) {
-      timelineBodyRef.current.style.cursor = '';
-    }
   }, []);
   // Unmount mid-autoscroll: stop the rAF loop.
   useEffect(() => handlePanEnd, [handlePanEnd]);
@@ -684,6 +689,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
             totalWidth={timelineWidth}
             viewMode={viewMode}
             weekStart={weekStart}
+            today={today.format('YYYY-MM-DD')}
             locale={locale}
             isNonWorkingDay={isNonWorkingDay}
           />
@@ -695,8 +701,6 @@ export const Gantt = factory<GanttFactory>((_props) => {
           onScroll={handleTimelineScroll}
           onPointerDown={handlePanStart}
           onPointerMove={handlePanMove}
-          onPointerUp={handlePanEnd}
-          onPointerCancel={handlePanEnd}
         >
           <div
             {...getStyles('timelineContent', {

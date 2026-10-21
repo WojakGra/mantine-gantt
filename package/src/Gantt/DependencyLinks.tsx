@@ -191,7 +191,7 @@ function DependencyLinksComponent({
           <g key={link.key}>
             {/* Invisible fat stroke: the visible line is 1.5–2.5px, far too thin to click
                 reliably. This overlay widens the hit area without changing the look.
-                pointerdown must not reach .timelineBody: its pan handler captures the
+                pointerdown must not reach .timelineBody: a pan started there can capture the
                 pointer, which would retarget the trailing click to the body and the
                 link deletion would never fire. */}
             <path

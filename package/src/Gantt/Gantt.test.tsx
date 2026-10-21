@@ -1,6 +1,6 @@
 import React, { StrictMode } from 'react';
 import { act, fireEvent, render as renderPlain } from '@testing-library/react';
-import { MantineProvider } from '@mantine/core';
+import { createTheme, MantineProvider } from '@mantine/core';
 import { render, screen } from '@mantine-tests/core';
 import { Gantt, GanttTask } from './index';
 
@@ -250,6 +250,27 @@ describe('Styles API', () => {
     );
     expect(container.querySelector('.mantine-Gantt-timelineHeaderCell')).toHaveClass('two');
     expect(container.querySelector('.mantine-Gantt-gridLine')).toHaveClass('two');
+  });
+
+  it('a theme classNames change reaches the memoized children', () => {
+    const app = (cls: string) => (
+      <MantineProvider
+        theme={createTheme({
+          components: {
+            Gantt: Gantt.extend({
+              classNames: { timelineHeaderCell: cls, gridLine: cls, taskListRow: cls },
+            }),
+          },
+        })}
+      >
+        <Gantt tasks={mockTasks} />
+      </MantineProvider>
+    );
+    const { container, rerender } = renderPlain(app('one'));
+    rerender(app('two'));
+    for (const selector of ['timelineHeaderCell', 'gridLine', 'taskListRow']) {
+      expect(container.querySelector(`.mantine-Gantt-${selector}`)).toHaveClass('two');
+    }
   });
 });
 
@@ -672,6 +693,62 @@ describe('interaction extras', () => {
     });
     expect(onTaskUpdate).not.toHaveBeenCalled();
     expect(onTasksChange).not.toHaveBeenCalled();
+  });
+
+  it('Shift+ArrowRight grows a task by one day', () => {
+    const onTaskUpdate = jest.fn();
+    const { container } = render(<Gantt defaultTasks={mockTasks} onTaskUpdate={onTaskUpdate} />);
+    fireEvent.keyDown(container.querySelector('[data-task-id="1"]')!, {
+      key: 'ArrowRight',
+      shiftKey: true,
+    });
+    expect(onTaskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', startDate: '2026-02-01', duration: 6 })
+    );
+  });
+
+  it('a drag frame re-renders neither the task list nor the header and grid', () => {
+    // Every getStyles(selector) call reads attributes[selector]: count the reads per selector.
+    const reads = new Map<string, number>();
+    const attributes = new Proxy(
+      {},
+      {
+        get: (_, key) => {
+          reads.set(String(key), (reads.get(String(key)) ?? 0) + 1);
+          return undefined;
+        },
+      }
+    );
+    const { container } = render(<Gantt defaultTasks={mockTasks} attributes={attributes} />);
+    const bar = container.querySelector('[data-task-id="1"]')!;
+    pointer(bar, 'pointerdown', 100);
+    pointer(document, 'pointermove', 106); // activates the drag (extends the bounds once)
+    reads.clear();
+    pointer(document, 'pointermove', 110);
+    expect(reads.get('taskBar')).toBeGreaterThan(0);
+    expect(reads.get('taskListRow')).toBeUndefined();
+    expect(reads.get('timelineHeaderCell')).toBeUndefined();
+    expect(reads.get('gridLine')).toBeUndefined();
+    pointer(document, 'pointerup', 110);
+  });
+
+  it("the header's today cell follows the date after midnight", () => {
+    jest.useFakeTimers({ now: new Date(2026, 1, 5, 23, 59) });
+    try {
+      const app = (selectedTaskId: string) => (
+        <MantineProvider>
+          <Gantt tasks={mockTasks} selectedTaskId={selectedTaskId} />
+        </MantineProvider>
+      );
+      const { container, rerender } = renderPlain(app('1'));
+      const todayLabel = () => container.querySelector('[data-today]')?.textContent;
+      expect(todayLabel()).toBe('5');
+      jest.setSystemTime(new Date(2026, 1, 6, 0, 1));
+      rerender(app('2'));
+      expect(todayLabel()).toBe('6');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('marks the selected task on its bar and list row', () => {
@@ -1142,6 +1219,21 @@ describe('readOnly / locked', () => {
     pointer(bar, 'pointermove', 160, 'mouse');
     pointer(bar, 'pointerup', 160, 'mouse');
     expect(body.scrollLeft).toBe(140);
+  });
+
+  it('a mouse pan released outside the timeline body ends', () => {
+    const { container } = render(<Gantt tasks={mockTasks} readOnly />);
+    const body = container.querySelector('[class*="timelineBody"]') as HTMLElement;
+    body.scrollLeft = 100;
+    pointer(body, 'pointerdown', 200, 'mouse');
+    // Leaves the body before the capture distance, so the body never sees the release.
+    pointer(document.body, 'pointermove', 150, 'mouse');
+    pointer(document.body, 'pointerup', 150, 'mouse');
+    expect(body.style.cursor).toBe('');
+    expect(document.body.style.userSelect).toBe('');
+    // A buttonless hover must not pan.
+    pointer(body, 'pointermove', 260, 'mouse');
+    expect(body.scrollLeft).toBe(100);
   });
 
   it('a locked task is inert while its neighbours stay editable', () => {

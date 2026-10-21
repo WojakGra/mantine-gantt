@@ -681,9 +681,26 @@ export function applyAutoSchedule(
       .map((row) => row.task.id)
   );
 
+  // A dependency on one's own ancestor is self-referential (the envelope contains the task)
+  // and would close a cycle with the child → parent edges below: ignored.
+  const isAncestor = (ancestorId: string, id: string) => {
+    for (let p = byId.get(id)?.parentId; p && parents.has(p); p = byId.get(p)?.parentId) {
+      if (p === ancestorId) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Successor edges, plus child → parent: a child is settled before its parent's envelope is
   // read, so before anything that depends on the parent.
   const edges = buildSuccessorMap(tasks);
+  edges.forEach((succs, id) =>
+    edges.set(
+      id,
+      succs.filter((s) => !isAncestor(id, s))
+    )
+  );
   tasks.forEach((t) => {
     if (t.parentId && parents.has(t.parentId)) {
       edges.set(t.id, [...(edges.get(t.id) ?? []), t.parentId]);
@@ -731,7 +748,7 @@ export function applyAutoSchedule(
     let earliestStart: Dayjs | null = null;
     for (const raw of task.dependencies ?? []) {
       const { taskId, type, lag } = normalizeDependency(raw);
-      const dep = schedule(taskId);
+      const dep = isAncestor(taskId, id) ? undefined : schedule(taskId);
       if (!dep) {
         continue;
       }
@@ -772,8 +789,8 @@ export function applyAutoSchedule(
  * side: the rendered set then only changes every `overscan` rows of scrolling instead of on
  * every scroll event, which is what keeps rows from flickering as they come into view.
  *
- * `viewportHeight <= 0` means "not measured yet" (first paint, jsdom) - render everything,
- * because rendering nothing would blank the chart on environments that never measure.
+ * `viewportHeight <= 0` renders everything rather than nothing. Gantt never hits it: it
+ * passes a fallback height until the body is measured.
  */
 export function visibleRowRange(
   scrollTop: number,
