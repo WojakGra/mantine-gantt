@@ -1,5 +1,5 @@
 {
-  "servers": {
+  "mcpServers": {
     "mantine": {
       "command": "npx",
       "args": [

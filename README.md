@@ -26,6 +26,8 @@ npm install mantine-gantt @mantine/core @mantine/hooks dayjs
 yarn add mantine-gantt @mantine/core @mantine/hooks dayjs
 ```
 
+Requires `@mantine/core` and `@mantine/hooks` 9.0.0 or newer. Mantine 7 and 8 are not supported.
+
 ## Quick Start
 
 ```tsx
