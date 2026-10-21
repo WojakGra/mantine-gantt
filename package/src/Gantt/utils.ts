@@ -1,6 +1,6 @@
 import dayjs, { Dayjs } from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
-import type { GanttDependency, GanttTask, GanttTreeRow } from './types';
+import type { GanttDependency, GanttDragType, GanttTask, GanttTreeRow } from './types';
 
 dayjs.extend(isoWeek);
 
@@ -79,10 +79,27 @@ export function barAnchors(
 }
 
 /**
- * Calculate duration from pixel width
+ * Live edges of a bar dragged by a continuous `deltaX`: a move slides both edges, a resize
+ * moves one and never shrinks the bar below one column. Shared by the bar and its arrows,
+ * so the two can't drift apart.
  */
-export function pixelsToDuration(pixels: number, columnWidth: number): number {
-  return Math.max(1, Math.round(pixels / columnWidth));
+export function dragEdges(
+  edges: { left: number; right: number },
+  type: GanttDragType | null | undefined,
+  deltaX: number,
+  columnWidth: number
+): { left: number; right: number } {
+  const { left, right } = edges;
+  if (type === 'move') {
+    return { left: left + deltaX, right: right + deltaX };
+  }
+  if (type === 'resize-end') {
+    return { left, right: Math.max(left + columnWidth, right + deltaX) };
+  }
+  if (type === 'resize-start') {
+    return { left: Math.min(left + deltaX, right - columnWidth), right };
+  }
+  return edges;
 }
 
 /** Default `isNonWorkingDay`: Saturday and Sunday. */
@@ -139,7 +156,8 @@ export function generateWeekHeaders(
   }> = [];
   let current = startOfWeek(startDate, weekStart);
 
-  while (current.isBefore(endDate)) {
+  // Inclusive end, like generateDayHeaders: an end on a week start still opens that week.
+  while (current.isBefore(endDate) || current.isSame(endDate, 'day')) {
     const weekEnd = current.add(6, 'day').endOf('day');
     const actualEnd = weekEnd.isAfter(endDate) ? endDate : weekEnd;
     const actualStart = current.isBefore(startDate) ? startDate : current;
@@ -189,42 +207,44 @@ export function calculateTimelineBounds(
   }
 
   if (tasks.length === 0) {
-    // Today is only the fallback - an explicitly passed bound always wins.
-    const today = dayjs();
+    // Today is only the fallback - an explicitly passed bound always wins. Midnight, like
+    // every other bound: dateToPixel truncates, so a time of day shifts dates a column left.
+    const today = dayjs().startOf('day');
     return {
       start: startDate ? normalize(startDate) : today.subtract(padding, 'day'),
       end: endDate ? normalize(endDate) : today.add(30 + padding, 'day'),
     };
   }
 
-  let earliest = dayjs(tasks[0].startDate);
-  let latest = getTaskEndDate(tasks[0].startDate, tasks[0].duration, isNonWorkingDay);
-
+  // A parent's own dates are ignored - it renders its children's envelope, which the
+  // children's own spans already cover. Its baseline is still drawn, so it still counts.
+  const parents = new Set(
+    buildTaskTree(tasks, new Set())
+      .filter((row) => row.hasChildren)
+      .map((row) => row.task.id)
+  );
+  const spans: Array<[startDate: string, duration: number]> = [];
   tasks.forEach((task) => {
-    const taskStart = dayjs(task.startDate);
-    const taskEnd = getTaskEndDate(task.startDate, task.duration, isNonWorkingDay);
-
-    if (taskStart.isBefore(earliest)) {
-      earliest = taskStart;
+    if (!parents.has(task.id)) {
+      spans.push([task.startDate, task.duration]);
     }
-    // getTaskEndDate clamps to ≥ start, so this can never move `latest` backwards.
-    if (taskEnd.isAfter(latest)) {
-      latest = taskEnd;
-    }
-
     if (task.baseline) {
-      const baseStart = dayjs(task.baseline.startDate);
-      const baseEnd = getTaskEndDate(
-        task.baseline.startDate,
-        task.baseline.duration,
-        isNonWorkingDay
-      );
-      if (baseStart.isBefore(earliest)) {
-        earliest = baseStart;
-      }
-      if (baseEnd.isAfter(latest)) {
-        latest = baseEnd;
-      }
+      spans.push([task.baseline.startDate, task.baseline.duration]);
+    }
+  });
+
+  // Never empty: a parent chain always ends in a leaf.
+  let earliest = dayjs(spans[0][0]);
+  let latest = getTaskEndDate(spans[0][0], spans[0][1], isNonWorkingDay);
+  spans.forEach(([start, duration]) => {
+    const spanStart = dayjs(start);
+    // getTaskEndDate clamps to ≥ start, so this can never move `latest` backwards.
+    const spanEnd = getTaskEndDate(start, duration, isNonWorkingDay);
+    if (spanStart.isBefore(earliest)) {
+      earliest = spanStart;
+    }
+    if (spanEnd.isAfter(latest)) {
+      latest = spanEnd;
     }
   });
 
@@ -654,19 +674,32 @@ export function applyAutoSchedule(
   isNonWorkingDay?: IsNonWorkingDay
 ): GanttTask[] {
   const byId = new Map(tasks.map((t) => [t.id, t]));
-  const successors = buildSuccessorMap(tasks);
   const next = new Map(byId);
+  const parents = new Set(
+    buildTaskTree(tasks, new Set())
+      .filter((row) => row.hasChildren)
+      .map((row) => row.task.id)
+  );
 
-  // Topological order over the successor DAG (Kahn). Nodes left with a positive
-  // indegree belong to a cyclic input and are left untouched.
+  // Successor edges, plus child → parent: a child is settled before its parent's envelope is
+  // read, so before anything that depends on the parent.
+  const edges = buildSuccessorMap(tasks);
+  tasks.forEach((t) => {
+    if (t.parentId && parents.has(t.parentId)) {
+      edges.set(t.id, [...(edges.get(t.id) ?? []), t.parentId]);
+    }
+  });
+
+  // Topological order (Kahn). Nodes left with a positive indegree belong to a cyclic input
+  // and are left untouched.
   const indegree = new Map<string, number>();
-  successors.forEach((succs) => succs.forEach((s) => indegree.set(s, (indegree.get(s) ?? 0) + 1)));
+  edges.forEach((succs) => succs.forEach((s) => indegree.set(s, (indegree.get(s) ?? 0) + 1)));
   const queue = tasks.filter((t) => !indegree.has(t.id)).map((t) => t.id);
   const order: string[] = [];
   while (queue.length > 0) {
     const id = queue.shift()!;
     order.push(id);
-    for (const succ of successors.get(id) ?? []) {
+    for (const succ of edges.get(id) ?? []) {
       const d = (indegree.get(succ) ?? 0) - 1;
       indegree.set(succ, d);
       if (d === 0) {
@@ -675,17 +708,30 @@ export function applyAutoSchedule(
     }
   }
 
+  // A parent predecessor counts with its envelope - over the children as cascaded so far.
+  // ponytail: rebuilds the tree per parent dependency (O(n) each); cache it per pass if hot.
+  const schedule = (id: string): Pick<GanttTask, 'startDate' | 'duration'> | undefined => {
+    if (!parents.has(id)) {
+      return next.get(id);
+    }
+    const row = buildTaskTree([...next.values()], new Set(), isNonWorkingDay).find(
+      (r) => r.task.id === id
+    );
+    return row && getEffectiveTask(row);
+  };
+
   let changed = false;
   for (const id of order) {
     const task = next.get(id);
-    if (!task) {
+    // Parents are never moved: their own dates are ignored, children carry the schedule.
+    if (!task || parents.has(id)) {
       continue;
     }
     // Earliest allowed start: the latest of what each dependency demands.
     let earliestStart: Dayjs | null = null;
     for (const raw of task.dependencies ?? []) {
       const { taskId, type, lag } = normalizeDependency(raw);
-      const dep = next.get(taskId);
+      const dep = schedule(taskId);
       if (!dep) {
         continue;
       }

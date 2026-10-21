@@ -16,7 +16,7 @@ interface TimelineHeaderProps {
   isNonWorkingDay?: (date: Date) => boolean;
 }
 
-export function TimelineHeader({
+function TimelineHeaderComponent({
   startDate,
   endDate,
   columnWidth,
@@ -104,5 +104,7 @@ export function TimelineHeader({
     </div>
   );
 }
+
+export const TimelineHeader = React.memo(TimelineHeaderComponent);
 
 TimelineHeader.displayName = 'TimelineHeader';

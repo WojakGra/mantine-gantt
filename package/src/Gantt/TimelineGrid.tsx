@@ -16,7 +16,7 @@ interface TimelineGridProps {
   isNonWorkingDay?: (date: Date) => boolean;
 }
 
-export function TimelineGrid({
+function TimelineGridComponent({
   startDate,
   endDate,
   columnWidth,
@@ -105,5 +105,7 @@ export function TimelineGrid({
     </div>
   );
 }
+
+export const TimelineGrid = React.memo(TimelineGridComponent);
 
 TimelineGrid.displayName = 'TimelineGrid';

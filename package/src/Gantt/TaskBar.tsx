@@ -4,6 +4,7 @@ import { getThemeColor, Tooltip, useMantineTheme, type GetStylesApi } from '@man
 import type { GanttDragType, GanttFactory, GanttTask } from './types';
 import {
   dateToPixel,
+  dragEdges,
   durationToPixels,
   formatTaskDate as formatDate,
   getTaskEndDate,
@@ -84,19 +85,15 @@ function TaskBarComponent({
     : 'var(--mantine-primary-color-filled)';
 
   // Live drag geometry. Delta is continuous px (snapped to whole days only on release), so
-  // the bar tracks the pointer smoothly. move → slide; resize-end → widen; resize-start →
-  // pin the right edge and follow the left (min one column). Milestones only ever move.
-  let visualLeft = baseLeft;
-  let visualWidth = baseWidth;
-  if (dragType === 'move') {
-    visualLeft = baseLeft + dragDeltaX;
-  } else if (dragType === 'resize-end' && !isMilestone) {
-    visualWidth = Math.max(columnWidth, baseWidth + dragDeltaX);
-  } else if (dragType === 'resize-start' && !isMilestone) {
-    const delta = Math.min(dragDeltaX, baseWidth - columnWidth);
-    visualLeft = baseLeft + delta;
-    visualWidth = baseWidth - delta;
-  }
+  // the bar tracks the pointer smoothly. Milestones only ever move.
+  const edges = dragEdges(
+    { left: baseLeft, right: baseLeft + baseWidth },
+    isMilestone && dragType !== 'move' ? null : dragType,
+    dragDeltaX,
+    columnWidth
+  );
+  const visualLeft = edges.left;
+  const visualWidth = edges.right - edges.left;
 
   // Live schedule readout while dragging, snapped the same way `commit` will snap.
   let dragLabel: string | null = null;
@@ -123,7 +120,9 @@ function TaskBarComponent({
 
   const bar = (
     <div
-      {...getStyles('taskBar')}
+      {...getStyles('taskBar', {
+        style: { left: visualLeft, width: visualWidth, ['--task-bar-color' as string]: barColor },
+      })}
       role="button"
       tabIndex={0}
       data-task-id={task.id}
@@ -143,11 +142,6 @@ function TaskBarComponent({
                 isLocked ? '' : ' Arrow keys move, Shift+Arrow resize.'
               }`
       }
-      style={{
-        left: visualLeft,
-        width: visualWidth,
-        ['--task-bar-color' as string]: barColor,
-      }}
       onPointerDown={inert ? undefined : (e) => startDrag('move', task.id, e)}
       onClick={() => {
         if (didDrag()) {
@@ -190,7 +184,7 @@ function TaskBarComponent({
 
       {/* Progress indicator */}
       {!isMilestone && (
-        <div {...getStyles('taskBarProgress')} style={{ width: `${task.progress}%` }} />
+        <div {...getStyles('taskBarProgress', { style: { width: `${task.progress}%` } })} />
       )}
 
       {/* Label */}
@@ -236,6 +230,7 @@ function TaskBarComponent({
 // Custom comparison to prevent re-renders when task data hasn't changed. Every callback is
 // compared too - they are part of the props contract, and skipping them would let a bar
 // keep calling a stale closure (e.g. an old onTaskClick) after its parent re-rendered.
+// `getStyles` only changes with the Styles API props (see Gantt.tsx).
 function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolean {
   return (
     prevProps.task.id === nextProps.task.id &&
@@ -263,6 +258,7 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.nudge === nextProps.nudge &&
     prevProps.onTaskClick === nextProps.onTaskClick &&
     prevProps.locale === nextProps.locale &&
+    prevProps.getStyles === nextProps.getStyles &&
     prevProps.startDate.isSame(nextProps.startDate)
   );
 }

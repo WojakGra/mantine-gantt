@@ -180,8 +180,9 @@ export interface GanttBaseProps {
   onLinkDelete?: (fromTaskId: string, toTaskId: string, type: GanttDependencyType) => void;
 
   /**
-   * Automatically shift dependent tasks (finish-to-start, zero lag) when a task is
-   * moved or resized, so successors never start before their predecessors finish.
+   * Automatically push dependent tasks later when a task is moved or resized, so every
+   * dependency (any type, with its lag) still holds. Tasks are never pulled earlier; a
+   * dependency on a parent uses the span of its children.
    * <br>Default: `false`.
    */
   autoSchedule?: boolean;

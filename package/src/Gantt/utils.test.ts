@@ -18,7 +18,6 @@ import {
   getTaskSpan,
   isWeekend,
   normalizeDependency,
-  pixelsToDuration,
   pixelToDate,
   shiftTask,
   snapToGrid,
@@ -93,22 +92,6 @@ describe('utils', () => {
     });
   });
 
-  describe('pixelsToDuration', () => {
-    it('calculates correct duration from pixels', () => {
-      expect(pixelsToDuration(200, 40)).toBe(5);
-      expect(pixelsToDuration(40, 40)).toBe(1);
-    });
-
-    it('returns minimum of 1 for very small widths', () => {
-      expect(pixelsToDuration(10, 40)).toBe(1);
-      expect(pixelsToDuration(0, 40)).toBe(1);
-    });
-
-    it('rounds to nearest day', () => {
-      expect(pixelsToDuration(145, 40)).toBe(4); // 3.6 -> 4
-    });
-  });
-
   describe('generateDayHeaders', () => {
     it('generates correct number of headers', () => {
       const start = dayjs('2026-02-01');
@@ -171,6 +154,12 @@ describe('utils', () => {
       // Week of Sun Feb 1 .. Sat Feb 7 contains Mon Feb 2, which is ISO week 6.
       const week = headers.find((w) => w.startDate.format('YYYY-MM-DD') === '2026-02-01');
       expect(week?.weekNumber).toBe(6);
+    });
+
+    it('covers an inclusive end that falls on a week start', () => {
+      // Mon Feb 2 .. Mon Feb 9 is 8 days; the last Monday opens a one-day week.
+      const headers = generateWeekHeaders(dayjs('2026-02-02'), dayjs('2026-02-09'), 1);
+      expect(headers.map((w) => w.days)).toEqual([7, 1]);
     });
   });
 
@@ -254,6 +243,17 @@ describe('utils', () => {
       const today = dayjs();
       expect(bounds.start.isBefore(today)).toBe(true);
       expect(bounds.end.isAfter(today)).toBe(true);
+    });
+
+    it('starts and ends the default range at midnight, like task dates', () => {
+      jest.useFakeTimers({ now: new Date(2026, 1, 20, 14, 30) });
+      try {
+        const { start, end } = calculateTimelineBounds([]);
+        expect(start.format('YYYY-MM-DD HH:mm')).toBe('2026-02-13 00:00');
+        expect(end.format('YYYY-MM-DD HH:mm')).toBe('2026-03-29 00:00');
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('respects provided dates with an empty task list', () => {
@@ -582,6 +582,33 @@ describe('calculateTimelineBounds with milestones', () => {
   });
 });
 
+describe('calculateTimelineBounds with a hierarchy', () => {
+  it("ignores a parent's own (stale) dates - it renders its children's envelope", () => {
+    const tasks: GanttTask[] = [
+      { id: 'p', label: 'P', startDate: '2020-01-01', duration: 1, progress: 0 },
+      { id: 'c', label: 'C', startDate: '2026-03-10', duration: 5, progress: 0, parentId: 'p' },
+    ];
+    const { start, end } = calculateTimelineBounds(tasks);
+    expect(start.format('YYYY-MM-DD')).toBe('2026-03-03'); // child start − 7
+    expect(end.format('YYYY-MM-DD')).toBe('2026-03-21'); // child end (03-14) + 7
+  });
+
+  it("still fits a parent's baseline, which is drawn under the summary bar", () => {
+    const tasks: GanttTask[] = [
+      {
+        id: 'p',
+        label: 'P',
+        startDate: '2020-01-01',
+        duration: 1,
+        progress: 0,
+        baseline: { startDate: '2026-03-01', duration: 2 },
+      },
+      { id: 'c', label: 'C', startDate: '2026-03-10', duration: 5, progress: 0, parentId: 'p' },
+    ];
+    expect(calculateTimelineBounds(tasks).start.format('YYYY-MM-DD')).toBe('2026-02-22');
+  });
+});
+
 describe('buildSuccessorMap', () => {
   const t = (id: string, over: Partial<GanttTask> = {}): GanttTask => ({
     id,
@@ -682,6 +709,39 @@ describe('applyAutoSchedule', () => {
   it('ignores unknown dependency ids', () => {
     const tasks = [t('b', { dependencies: ['ghost'] })];
     expect(applyAutoSchedule(tasks, 'b')).toBe(tasks);
+  });
+
+  describe('with a parent predecessor', () => {
+    it("pushes the successor past the parent's envelope, not its own stale dates", () => {
+      const tasks = [
+        t('p', { startDate: '2026-03-01', duration: 1 }), // own dates: ignored
+        t('c', { parentId: 'p', startDate: '2026-03-10', duration: 5 }), // envelope Mar 10–14
+        t('b', { dependencies: ['p'], startDate: '2026-03-05' }),
+      ];
+      const result = applyAutoSchedule(tasks, 'c');
+      expect(result.find((x) => x.id === 'b')!.startDate).toBe('2026-03-15');
+    });
+
+    it("carries a child's push on to the parent's successor", () => {
+      const tasks = [
+        t('p'),
+        t('x'), // Mar 2–3
+        t('c', { parentId: 'p', dependencies: ['x'], duration: 5 }), // pushed to Mar 4–8
+        t('b', { dependencies: ['p'], startDate: '2026-03-05' }),
+      ];
+      const result = applyAutoSchedule(tasks, 'x');
+      expect(result.find((x) => x.id === 'c')!.startDate).toBe('2026-03-04');
+      expect(result.find((x) => x.id === 'b')!.startDate).toBe('2026-03-09');
+    });
+
+    it("never rewrites a parent's own dates for its own dependencies", () => {
+      const tasks = [
+        t('x'), // Mar 2–3
+        t('p', { startDate: '2026-03-01', dependencies: ['x'] }),
+        t('c', { parentId: 'p', startDate: '2026-03-10' }),
+      ];
+      expect(applyAutoSchedule(tasks, 'x')).toBe(tasks);
+    });
   });
 });
 
