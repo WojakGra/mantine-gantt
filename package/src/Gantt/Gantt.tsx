@@ -10,7 +10,7 @@ import {
   useStyles,
   VisuallyHidden,
 } from '@mantine/core';
-import { useMergedRef, useUncontrolled } from '@mantine/hooks';
+import { useCallbackRef, useMergedRef, useUncontrolled } from '@mantine/hooks';
 import { DependencyLinks } from './DependencyLinks';
 import { TaskBar } from './TaskBar';
 import { defaultColumns, TaskList } from './TaskList';
@@ -43,8 +43,14 @@ import classes from './Gantt.module.css';
 // so dragging into the future is effectively unbounded.
 const DRAG_BUFFER_DAYS = 30;
 
+// A mouse pan grabs the pointer only after moving this far, so a click stays a click.
+const PAN_CAPTURE_DISTANCE = 3;
+
 // Below task list width + this much, the task list starts collapsed (phones in portrait).
 const MIN_TIMELINE_WIDTH = 240;
+
+// Row range to render before the timeline body has been measured (first render, SSR, jsdom).
+const UNMEASURED_VIEWPORT_HEIGHT = 1200;
 
 // Stable empty set so the reference doesn't change on every render when the feature is off.
 const EMPTY_CRITICAL = new Set<string>();
@@ -164,6 +170,16 @@ export const Gantt = factory<GanttFactory>((_props) => {
     varsResolver,
   });
 
+  // The children are memoized, but getStyles is a new function on every render. They get a
+  // wrapper that always calls the latest one and changes identity only with the Styles API
+  // inputs: a classNames/styles/theme change re-renders them, a drag or scroll frame does not.
+  const getStylesRef = useRef(getStyles);
+  getStylesRef.current = getStyles;
+  const stableGetStyles = useCallback<typeof getStyles>(
+    (...args) => getStylesRef.current(...args),
+    [classNames, styles, unstyled, vars, attributes, theme]
+  );
+
   // Calculate effective column width based on viewMode
   // Week view: narrower columns to show more days
   // Month view: even narrower to show more time range
@@ -185,12 +201,14 @@ export const Gantt = factory<GanttFactory>((_props) => {
 
   // Controlled (`tasks` + `onTasksChange`) or uncontrolled (`defaultTasks`) - in controlled
   // mode nothing is stored here, every change goes out through onTasksChange.
-  const [tasks, setTasks] = useUncontrolled<GanttTask[]>({
+  const [tasks, setTasksUnstable] = useUncontrolled<GanttTask[]>({
     value: tasksProp,
     defaultValue: defaultTasks,
     finalValue: [],
     onChange: onTasksChange,
   });
+  // useUncontrolled hands out a new setter every render; memoized children need stable callbacks.
+  const setTasks = useCallbackRef(setTasksUnstable);
 
   // Collapse state (uncontrolled). When defaultExpandedIds is given, every parent
   // not listed starts collapsed; otherwise everything starts expanded.
@@ -246,12 +264,17 @@ export const Gantt = factory<GanttFactory>((_props) => {
   // Task list collapse: the user's (or consumer's) choice wins; until there is one, follow
   // the container width so a phone starts on the timeline instead of a clipped list.
   const [narrow, setNarrow] = useState(false);
-  const [collapsedChoice, setCollapsedChoice] = useUncontrolled<boolean | undefined>({
+  const [collapsedChoice, setCollapsedChoiceUnstable] = useUncontrolled<boolean | undefined>({
     value: taskListCollapsed,
     defaultValue: defaultTaskListCollapsed,
     onChange: onTaskListCollapsedChange as (value: boolean | undefined) => void,
   });
+  const setCollapsedChoice = useCallbackRef(setCollapsedChoiceUnstable);
   const listCollapsed = collapsedChoice ?? narrow;
+  const toggleListCollapsed = useCallback(
+    () => setCollapsedChoice(!listCollapsed),
+    [listCollapsed, setCollapsedChoice]
+  );
   const listWidth = resolveTaskListWidth(taskListWidth, columns);
 
   // Refs for scroll synchronization
@@ -335,14 +358,25 @@ export const Gantt = factory<GanttFactory>((_props) => {
   // there is no empty area to the right of the last column.
   const fillDays = effectiveColumnWidth > 0 ? Math.ceil(viewport.width / effectiveColumnWidth) : 0;
   const totalDays = Math.max(bounds.end.diff(bounds.start, 'day') + 1, fillDays);
-  const displayEnd = bounds.start.add(totalDays - 1, 'day');
+  // Memoized: the header and grid key their column generation on this object's identity.
+  const displayEnd = useMemo(
+    () => bounds.start.add(totalDays - 1, 'day'),
+    [bounds.start, totalDays]
+  );
   const timelineWidth = totalDays * effectiveColumnWidth;
 
   // Row virtualization: rows are a fixed height, so the visible slice is pure arithmetic.
   // Both panes render only [firstRow, lastRow); the rest is padding/absolute offset, which
   // keeps scrollHeight - and therefore the scroll sync - unchanged.
-  const [firstRow, lastRow] = visibleRowRange(scrollTop, viewport.height, rowHeight, rows.length);
-  const visibleRows = rows.slice(firstRow, lastRow);
+  // Before the body is measured assume a tall screen rather than rendering every row: with
+  // 1000 tasks an unvirtualized first render costs more than everything that follows.
+  const [firstRow, lastRow] = visibleRowRange(
+    scrollTop,
+    viewport.height || UNMEASURED_VIEWPORT_HEIGHT,
+    rowHeight,
+    rows.length
+  );
+  const visibleRows = useMemo(() => rows.slice(firstRow, lastRow), [rows, firstRow, lastRow]);
 
   // Sync scroll between task list and timeline. Assigning an unchanged scrollTop fires no
   // scroll event, so the two handlers can't echo back and forth.
@@ -359,9 +393,10 @@ export const Gantt = factory<GanttFactory>((_props) => {
       timelineHeaderRef.current.scrollLeft = body.scrollLeft;
     }
     // Both panes are kept in sync, so the timeline's scrollTop is the single source for
-    // the virtualized row range.
-    setScrollTop(body.scrollTop);
-  }, []);
+    // the virtualized row range. Snapped to whole rows: nothing rendered changes within a
+    // row, so a sub-row (or purely horizontal) scroll must not commit.
+    setScrollTop(Math.floor(body.scrollTop / rowHeight) * rowHeight);
+  }, [rowHeight]);
 
   const handleTaskListScroll = useCallback(() => {
     if (taskListBodyRef.current && timelineBodyRef.current) {
@@ -370,8 +405,9 @@ export const Gantt = factory<GanttFactory>((_props) => {
   }, []);
 
   // Measure the timeline body so the grid can be widened to fill the viewport, and the root
-  // to tell whether the task list still leaves room for a usable timeline.
-  useEffect(() => {
+  // to tell whether the task list still leaves room for a usable timeline. Layout effect: the
+  // guessed row range above is corrected before the first paint.
+  useLayoutEffect(() => {
     const node = timelineBodyRef.current;
     const root = rootRef.current;
     if (!node || !root) {
@@ -470,8 +506,8 @@ export const Gantt = factory<GanttFactory>((_props) => {
     // One column of context to the left of the target.
     body.scrollLeft = dateToPixel(date, bounds.start, effectiveColumnWidth) - effectiveColumnWidth;
     if (rowIndex >= 0) {
-      // `body.clientHeight`, not `viewport.height`: on mount the measurement effect has not
-      // committed yet and the state is still 0.
+      // `body.clientHeight`, not `viewport.height`: on mount this render still holds the
+      // unmeasured state (0).
       body.scrollTop = Math.max(0, rowIndex * rowHeight - (body.clientHeight - rowHeight) / 2);
     }
     // Intentionally only re-runs when the target changes, not on every layout/row change.
@@ -485,8 +521,10 @@ export const Gantt = factory<GanttFactory>((_props) => {
     [onTaskClick]
   );
 
-  // Drag-to-pan the timeline with the mouse on empty space (the scrollbar is hidden). Bars and
-  // handles stopPropagation on pointerdown, so any pointerdown reaching here is empty canvas.
+  // Drag-to-pan the timeline with the mouse (the scrollbar is hidden). Editable bars and handles
+  // stopPropagation on pointerdown; inert ones (locked, summary, readOnly) let it through, so the
+  // pointer is captured only once it really moves - capturing on press would retarget the
+  // trailing click to the body and onTaskClick would never fire.
   // Touch/pen keep native scroll+momentum - only mouse lacks a grab affordance.
   // Middle button: hold-and-drag autoscroll (like Windows browsers do natively, but on every
   // platform) - the scroll speed grows with the distance from the press point.
@@ -497,6 +535,8 @@ export const Gantt = factory<GanttFactory>((_props) => {
     top: number;
     auto: boolean;
     raf: number | null;
+    pointerId: number;
+    captured: boolean;
   } | null>(null);
   const autoScrollTick = useCallback(() => {
     const pan = panRef.current;
@@ -511,6 +551,19 @@ export const Gantt = factory<GanttFactory>((_props) => {
     body.scrollTop += speed(pan.top - pan.y);
     pan.raf = requestAnimationFrame(autoScrollTick);
   }, []);
+  // On the document: until it captures, the pan's release can land outside the body.
+  const handlePanEnd = useCallback(function end() {
+    document.removeEventListener('pointerup', end);
+    document.removeEventListener('pointercancel', end);
+    if (panRef.current?.raf !== null && panRef.current?.raf !== undefined) {
+      cancelAnimationFrame(panRef.current.raf);
+    }
+    panRef.current = null;
+    document.body.style.userSelect = '';
+    if (timelineBodyRef.current) {
+      timelineBodyRef.current.style.cursor = '';
+    }
+  }, []);
   const handlePanStart = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const body = timelineBodyRef.current;
@@ -519,24 +572,28 @@ export const Gantt = factory<GanttFactory>((_props) => {
       }
       e.preventDefault(); // stop text/SVG selection (and the browser's own middle-click behavior)
       const auto = e.button === 1;
-      panRef.current = auto
-        ? { x: e.clientX, y: e.clientY, left: e.clientX, top: e.clientY, auto, raf: null }
-        : {
-            x: e.clientX,
-            y: e.clientY,
-            left: body.scrollLeft,
-            top: body.scrollTop,
-            auto,
-            raf: null,
-          };
-      body.setPointerCapture?.(e.pointerId);
+      panRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        left: auto ? e.clientX : body.scrollLeft,
+        top: auto ? e.clientY : body.scrollTop,
+        auto,
+        raf: null,
+        pointerId: e.pointerId,
+        captured: auto,
+      };
+      if (auto) {
+        body.setPointerCapture?.(e.pointerId);
+      }
       body.style.cursor = auto ? 'all-scroll' : 'grabbing';
       document.body.style.userSelect = 'none';
+      document.addEventListener('pointerup', handlePanEnd);
+      document.addEventListener('pointercancel', handlePanEnd);
       if (auto) {
         panRef.current.raf = requestAnimationFrame(autoScrollTick);
       }
     },
-    [autoScrollTick]
+    [autoScrollTick, handlePanEnd]
   );
   const handlePanMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const pan = panRef.current;
@@ -549,18 +606,12 @@ export const Gantt = factory<GanttFactory>((_props) => {
       pan.top = e.clientY;
       return;
     }
+    if (!pan.captured && Math.hypot(e.clientX - pan.x, e.clientY - pan.y) >= PAN_CAPTURE_DISTANCE) {
+      pan.captured = true;
+      body.setPointerCapture?.(pan.pointerId);
+    }
     body.scrollLeft = pan.left - (e.clientX - pan.x);
     body.scrollTop = pan.top - (e.clientY - pan.y);
-  }, []);
-  const handlePanEnd = useCallback(() => {
-    if (panRef.current?.raf !== null && panRef.current?.raf !== undefined) {
-      cancelAnimationFrame(panRef.current.raf);
-    }
-    panRef.current = null;
-    document.body.style.userSelect = '';
-    if (timelineBodyRef.current) {
-      timelineBodyRef.current.style.cursor = '';
-    }
   }, []);
   // Unmount mid-autoscroll: stop the rAF loop.
   useEffect(() => handlePanEnd, [handlePanEnd]);
@@ -604,8 +655,9 @@ export const Gantt = factory<GanttFactory>((_props) => {
   // Calculate today line position
   const today = dayjs();
   const todayPosition = dateToPixel(today, bounds.start, effectiveColumnWidth);
+  // Day granularity: `today` carries a time of day, the bounds are midnights.
   const showTodayLine =
-    showTodayMarker && today.isAfter(bounds.start) && today.isBefore(displayEnd);
+    showTodayMarker && !today.isBefore(bounds.start, 'day') && !today.isAfter(displayEnd, 'day');
 
   return (
     <Box ref={mergedRootRef} {...getStyles('root')} {...others}>
@@ -614,7 +666,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
         rows={visibleRows}
         columns={columns}
         locale={locale}
-        getStyles={getStyles}
+        getStyles={stableGetStyles}
         bodyRef={taskListBodyRef}
         onScroll={handleTaskListScroll}
         collapsedIds={collapsedIds}
@@ -623,7 +675,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
         contentHeight={rows.length * rowHeight}
         selectedTaskId={selectedTaskId}
         collapsed={listCollapsed}
-        onToggleCollapsed={() => setCollapsedChoice(!listCollapsed)}
+        onToggleCollapsed={toggleListCollapsed}
       />
 
       {/* Right Pane - Timeline */}
@@ -633,10 +685,11 @@ export const Gantt = factory<GanttFactory>((_props) => {
             startDate={bounds.start}
             endDate={displayEnd}
             columnWidth={effectiveColumnWidth}
-            getStyles={getStyles}
+            getStyles={stableGetStyles}
             totalWidth={timelineWidth}
             viewMode={viewMode}
             weekStart={weekStart}
+            today={today.format('YYYY-MM-DD')}
             locale={locale}
             isNonWorkingDay={isNonWorkingDay}
           />
@@ -648,13 +701,12 @@ export const Gantt = factory<GanttFactory>((_props) => {
           onScroll={handleTimelineScroll}
           onPointerDown={handlePanStart}
           onPointerMove={handlePanMove}
-          onPointerUp={handlePanEnd}
-          onPointerCancel={handlePanEnd}
         >
           <div
-            {...getStyles('timelineContent')}
+            {...getStyles('timelineContent', {
+              style: { width: timelineWidth, height: rows.length * rowHeight },
+            })}
             ref={timelineContentRef}
-            style={{ width: timelineWidth, height: rows.length * rowHeight }}
           >
             <TimelineGrid
               startDate={bounds.start}
@@ -662,7 +714,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
               columnWidth={effectiveColumnWidth}
               rowCount={rows.length}
               rowHeight={rowHeight}
-              getStyles={getStyles}
+              getStyles={stableGetStyles}
               viewMode={viewMode}
               weekStart={weekStart}
               isNonWorkingDay={isNonWorkingDay}
@@ -673,14 +725,15 @@ export const Gantt = factory<GanttFactory>((_props) => {
               <div {...getStyles('todayLine', { style: { left: todayPosition } })} />
             )}
 
-            {markers?.map((marker) => {
+            {markers?.map((marker, index) => {
               const date = dayjs(marker.date);
               if (date.isBefore(bounds.start) || date.isAfter(displayEnd)) {
                 return null;
               }
               return (
                 <div
-                  key={`${marker.date}-${marker.color ?? ''}`}
+                  // Markers have no id; date + color can repeat.
+                  key={index}
                   {...getStyles('marker', {
                     style: {
                       left: dateToPixel(date, bounds.start, effectiveColumnWidth),
@@ -702,16 +755,15 @@ export const Gantt = factory<GanttFactory>((_props) => {
               return (
                 <div
                   key={task.id}
-                  {...getStyles('timelineRow')}
+                  {...getStyles('timelineRow', { style: { top: index * rowHeight } })}
                   data-first={index === Math.floor(scrollTop / rowHeight) || undefined}
                   title={showTitle ? task.label : undefined}
-                  style={{ top: index * rowHeight }}
                 >
                   <TaskBar
                     task={task}
                     startDate={bounds.start}
                     columnWidth={effectiveColumnWidth}
-                    getStyles={getStyles}
+                    getStyles={stableGetStyles}
                     span={row.span}
                     isNonWorkingDay={calendar}
                     isSummary={row.hasChildren}
@@ -733,19 +785,20 @@ export const Gantt = factory<GanttFactory>((_props) => {
 
                   {showBaselines && task.baseline && (
                     <div
-                      {...getStyles('baselineBar')}
+                      {...getStyles('baselineBar', {
+                        style: {
+                          left: dateToPixel(
+                            task.baseline.startDate,
+                            bounds.start,
+                            effectiveColumnWidth
+                          ),
+                          width: durationToPixels(
+                            getTaskSpan(task.baseline.startDate, task.baseline.duration, calendar),
+                            effectiveColumnWidth
+                          ),
+                        },
+                      })}
                       data-task-id={task.id}
-                      style={{
-                        left: dateToPixel(
-                          task.baseline.startDate,
-                          bounds.start,
-                          effectiveColumnWidth
-                        ),
-                        width: durationToPixels(
-                          getTaskSpan(task.baseline.startDate, task.baseline.duration, calendar),
-                          effectiveColumnWidth
-                        ),
-                      }}
                     />
                   )}
                 </div>
@@ -758,7 +811,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
               startDate={bounds.start}
               columnWidth={effectiveColumnWidth}
               rowHeight={rowHeight}
-              getStyles={getStyles}
+              getStyles={stableGetStyles}
               activeDragId={active && active.type !== 'link' ? active.taskId : null}
               activeDragType={active && active.type !== 'link' ? active.type : null}
               dragDelta={active && active.type !== 'link' ? active.deltaX : 0}

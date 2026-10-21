@@ -1,22 +1,26 @@
 # Mantine Gantt
 
-A fully-featured Gantt chart component for [Mantine](https://mantine.dev/). Built with React, TypeScript, and integrates seamlessly with the Mantine ecosystem.
+An interactive Gantt chart component for [Mantine](https://mantine.dev/). React 18/19, TypeScript, drag interactions on plain pointer events, `dayjs` for dates.
 
 [![npm version](https://img.shields.io/npm/v/mantine-gantt.svg)](https://www.npmjs.com/package/mantine-gantt)
 [![npm downloads](https://img.shields.io/npm/dm/mantine-gantt.svg)](https://www.npmjs.com/package/mantine-gantt)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+Live demos, the full props table and the Styles API reference live in the
+[documentation](https://wojakgra.github.io/mantine-gantt).
+
 ## Features
 
-- 📊 **Interactive Timeline** - Drag tasks to reschedule, resize to change duration
-- 🔗 **Dependency Links** - Visual dependency arrows between tasks with interactive creation
-- 🧭 **Dependency types and lag** - FS, SS, FF and SF links with lag or lead, honoured by auto-scheduling and the critical path
-- 📅 **Working days** - Optionally count durations in working days, skipping weekends and holidays
-- 🎨 **Mantine Integration** - Full support for Mantine's styling API, themes, and CSS variables
-- 📱 **Responsive** - Works across different screen sizes with customizable column widths
-- ♿ **Accessible** - Keyboard navigation and ARIA attributes for screen readers
-- ⚡ **Virtualized rows** - Only the visible rows are rendered, so long task lists stay smooth
-- 🎯 **TypeScript** - Full type definitions included
+- Drag bars to reschedule, resize to change duration, nudge with the keyboard, zoom with Ctrl+wheel
+- Dependency arrows: drag to create, click to delete. FS, SS, FF and SF links with lag or lead
+- Auto-scheduling pushes successors later when a predecessor moves
+- Critical path highlighting, baselines, milestones and parent tasks with summary bars
+- Working-days mode counts durations and lag in working days, skipping weekends and holidays
+- Day, week and month view modes, a today line and custom date markers
+- Custom columns in the task list; the list collapses on narrow containers
+- Read-only mode and per-task `locked`
+- Virtualized rows: only the visible slice of the task list is rendered
+- Mantine Styles API, theme colors and CSS variables; ARIA attributes on bars and rows; full TypeScript types
 
 ## Installation
 
@@ -28,7 +32,14 @@ yarn add mantine-gantt @mantine/core @mantine/hooks dayjs
 
 Requires `@mantine/core` and `@mantine/hooks` 9.0.0 or newer. Mantine 7 and 8 are not supported.
 
-## Quick Start
+Import the styles once, after Mantine's own styles. Use `mantine-gantt/styles.layer.css` instead if
+you load Mantine through CSS layers.
+
+```tsx
+import 'mantine-gantt/styles.css';
+```
+
+## Quick start
 
 ```tsx
 import { Gantt, GanttTask } from 'mantine-gantt';
@@ -63,18 +74,18 @@ function App() {
 
 `Gantt` works in either mode, following the usual Mantine convention.
 
-**Uncontrolled** - pass `defaultTasks` and the component owns the task list. Drag, resize, link
-and keyboard edits are applied internally; `onTaskUpdate` / `onLinkCreate` / `onTasksChange` still
+Pass `defaultTasks` and the component owns the task list. Drag, resize, link and keyboard edits
+are applied internally. `onTaskUpdate`, `onLinkCreate`, `onLinkDelete` and `onTasksChange` still
 report them.
 
 ```tsx
 <Gantt defaultTasks={tasks} onTaskUpdate={(task) => save(task)} />
 ```
 
-**Controlled** - pass `tasks` and `onTasksChange`, and your store is the single source of truth.
-The component keeps no copy: after a drag the bar lands wherever the new `tasks` prop puts it, so
-if you ignore the change the bar snaps back. That is what makes external stores (TanStack Query,
-Redux, undo/redo) work.
+Pass `tasks` and `onTasksChange` and your store is the single source of truth. The component
+keeps no copy: after a drag the bar lands wherever the new `tasks` prop puts it, so if you ignore
+the change the bar snaps back. That is what makes external stores (TanStack Query, Redux,
+undo/redo) work.
 
 ```tsx
 const [tasks, setTasks] = useState(initialTasks);
@@ -82,172 +93,32 @@ const [tasks, setTasks] = useState(initialTasks);
 <Gantt tasks={tasks} onTasksChange={setTasks} />;
 ```
 
-## Breaking changes
-
-### Since 0.5.x
-
-**`GanttTask.dependencies` is now `(string | GanttDependency)[]`.** Your data does not change: a
-plain id still means a finish-to-start link with no lag. What breaks is TypeScript code that
-_reads_ the array as `string[]` (`deps.includes(id)`, passing it to a `string[]` parameter).
-Normalize it first:
-
-```diff
--const ids = task.dependencies ?? [];
-+import { normalizeDependency } from 'mantine-gantt';
-+const ids = (task.dependencies ?? []).map((dep) => normalizeDependency(dep).taskId);
-```
-
-If you store tasks that users edit in the chart, expect objects in `dependencies` only when you
-put them there yourself - dragging a link still writes a plain id.
-
-**The today line is painted by `.todayLine::after`.** The line now runs behind the task bars
-while its dot stays on top, which needed the background to move to a pseudo-element. A
-`background-color` override on the `todayLine` selector no longer recolors the line:
-
-```diff
--.myTodayLine { background-color: blue; }
-+.myTodayLine::after, .myTodayLine::before { background-color: blue; }
-```
-
-Not breaking: `workingDays` is off by default, and the third `row` argument of
-`GanttColumn.render` is optional to use.
-
-## Migrating from 0.2.x
-
-`tasks` used to be an initial value that the component copied into internal state; it is now the
-controlled value. To keep the 0.2 behaviour, rename the prop:
-
-```diff
--<Gantt tasks={tasks} />
-+<Gantt defaultTasks={tasks} />
-```
-
-Keep `tasks` only if you also pass `onTasksChange` (or otherwise update the prop yourself) -
-otherwise the bars will not move.
-
-## Props
-
-| Prop            | Type                 | Default | Description                                                                  |
-| --------------- | -------------------- | ------- | ---------------------------------------------------------------------------- |
-| `tasks`         | `GanttTask[]`        | -       | Tasks to display (controlled)                                                |
-| `defaultTasks`  | `GanttTask[]`        | -       | Initial tasks (uncontrolled)                                                 |
-| `onTasksChange` | `(tasks) => void`    | -       | Called with the full new list after any change                               |
-| `columnWidth`   | `number`             | `40`    | Width of each day column in pixels                                           |
-| `rowHeight`     | `number`             | `44`    | Height of each task row in pixels                                            |
-| `taskListWidth` | `number`             | auto    | Panel width; auto = sum of `columns` widths                                  |
-| `weekStart`     | `0 \| 1`             | `1`     | First day of the week (0 = Sunday, 1 = Monday)                               |
-| `locale`        | `string`             | `'en'`  | BCP 47 locale for month names and dates, e.g. `'de'` or `navigator.language` |
-| `showTitle`     | `boolean`            | `false` | Show task title on hover                                                     |
-| `startDate`     | `Date`               | Auto    | Start date of the timeline                                                   |
-| `endDate`       | `Date`               | Auto    | End date of the timeline                                                     |
-| `onTaskUpdate`  | `(task) => void`     | -       | Callback when a task is updated                                              |
-| `onTaskClick`   | `(task) => void`     | -       | Callback when a task is clicked                                              |
-| `onLinkCreate`  | `(from, to) => void` | -       | Callback when a dependency is created                                        |
-| `workingDays`   | `boolean`            | `false` | Count `duration` and `lag` in working days (see `isNonWorkingDay`)           |
-| `readOnly`      | `boolean`            | `false` | Disable drag, resize, linking, link deletion and keyboard nudges             |
-| `markers`       | `GanttMarker[]`      | -       | Extra vertical date lines: `{ date, label?, color? }`                        |
-
-## Task Object
-
-```tsx
-interface GanttTask {
-  id: string;
-  label: string;
-  startDate: string; // ISO date string
-  duration: number; // Days - working days with the `workingDays` prop
-  progress: number; // 0-100
-  dependencies?: (string | GanttDependency)[]; // 'id' = finish-to-start, no lag
-  color?: MantineColor;
-  locked?: boolean; // no drag, resize or keyboard nudge
-}
-
-interface GanttDependency {
-  taskId: string;
-  type?: 'FS' | 'SS' | 'FF' | 'SF'; // default 'FS'
-  lag?: number; // days, negative = lead
-}
-```
-
 ## Styling
 
-The Gantt component supports Mantine's Styles API:
+Every internal element has a Styles API selector, so `classNames`, `styles` and
+`Gantt.extend({ ... })` in the theme all work:
 
 ```tsx
 <Gantt
   defaultTasks={tasks}
-  classNames={{
-    root: 'my-gantt',
-    taskBar: 'my-task-bar',
-  }}
-  styles={{
-    taskBar: { borderRadius: '8px' },
-  }}
+  classNames={{ taskBar: 'my-task-bar' }}
+  styles={{ taskBar: { borderRadius: 8 } }}
 />
 ```
 
-### Available Selectors
+The full selector list is on the Styles API tab of the
+[documentation](https://wojakgra.github.io/mantine-gantt).
 
-- `root` - Main container
-- `taskList` - Left panel with task names
-- `taskListHeader` - Header of task list
-- `taskListBody` - Body of task list
-- `taskListRow` - Individual task row
-- `taskListCell` - Cell in task list
-- `timeline` - Right panel with chart
-- `timelineHeader` - Timeline header with dates
-- `timelineBody` - Timeline body with bars
-- `timelineRow` - Row in timeline
-- `taskBar` - Task bar element
-- `taskBarProgress` - Progress indicator
-- `taskBarLabel` - Task label
+## Changelog
 
-## Examples
-
-### Compact View
-
-```tsx
-<Gantt defaultTasks={tasks} columnWidth={25} rowHeight={32} />
-```
-
-### Wide View
-
-```tsx
-<Gantt defaultTasks={tasks} columnWidth={80} rowHeight={60} />
-```
-
-### With Callbacks
-
-```tsx
-<Gantt
-  defaultTasks={tasks}
-  onTaskUpdate={(task) => console.log('Updated:', task)}
-  onTaskClick={(task) => console.log('Clicked:', task)}
-  onLinkCreate={(from, to) => console.log('Link:', from, '->', to)}
-/>
-```
-
-## Development
-
-```bash
-# Install dependencies
-yarn
-
-# Update documentation
-npm run docgen
-
-# Start Storybook
-npm run storybook
-
-# Run tests
-npm run test
-
-# Build
-npm run build
-```
+Breaking changes and migration notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues as described in [SECURITY.md](SECURITY.md).
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the development
+commands and what to run before opening a pull request. See also the
+[Code of Conduct](CODE_OF_CONDUCT.md). Report security issues as described in
+[SECURITY.md](SECURITY.md).
 
 ## License
 

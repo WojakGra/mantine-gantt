@@ -8,7 +8,7 @@ import type {
   GanttTask,
   GanttTreeRow,
 } from './types';
-import { barAnchors, getEffectiveTask, normalizeDependency } from './utils';
+import { barAnchors, dragEdges, getEffectiveTask, normalizeDependency } from './utils';
 
 // Horizontal stub before/after an elbow, and the default elbow rounding radius.
 const CORNER_OFFSET = 10;
@@ -36,7 +36,7 @@ interface DependencyLinksProps {
   onLinkClick?: (fromTaskId: string, toTaskId: string, type: GanttDependencyType) => void;
 }
 
-export function DependencyLinks({
+function DependencyLinksComponent({
   rows,
   startDate,
   columnWidth,
@@ -76,7 +76,14 @@ export function DependencyLinks({
     }> = [];
     // Bar is vertically centered in the row, so midY is simply rowHeight / 2
     const barMidYOffset = rowHeight / 2;
-    const anchors = (task: GanttTask) => barAnchors(task, startDate, columnWidth, rowHeight);
+    // A dragged bar's anchors follow it exactly as the bar itself does.
+    const anchors = (task: GanttTask) =>
+      dragEdges(
+        barAnchors(task, startDate, columnWidth, rowHeight),
+        activeDragId === task.id ? activeDragType : null,
+        dragDelta,
+        columnWidth
+      );
 
     rows.forEach((toRow) => {
       const deps = toRow.task.dependencies;
@@ -108,17 +115,9 @@ export function DependencyLinks({
         // edge), F = finish (right edge).
         const fromSide = type[0] === 'S' ? 'left' : 'right';
         const toSide = type[1] === 'S' ? 'left' : 'right';
-        // A dragged bar's edge follows the pointer: both edges on a move, one on a resize.
-        const edgeDelta = (taskId: string, side: 'left' | 'right') =>
-          activeDragId === taskId &&
-          (activeDragType === 'move' ||
-            activeDragType === (side === 'left' ? 'resize-start' : 'resize-end'))
-            ? dragDelta
-            : 0;
-
-        const fromX = anchors(fromTask)[fromSide] + edgeDelta(fromTask.id, fromSide);
+        const fromX = anchors(fromTask)[fromSide];
         const fromBarMidY = fromIndex * rowHeight + barMidYOffset;
-        const toX = anchors(toTask)[toSide] + edgeDelta(toTask.id, toSide);
+        const toX = anchors(toTask)[toSide];
         const toBarMidY = toIndex * rowHeight + barMidYOffset;
 
         // Generate polyline points
@@ -192,7 +191,7 @@ export function DependencyLinks({
           <g key={link.key}>
             {/* Invisible fat stroke: the visible line is 1.5–2.5px, far too thin to click
                 reliably. This overlay widens the hit area without changing the look.
-                pointerdown must not reach .timelineBody: its pan handler captures the
+                pointerdown must not reach .timelineBody: a pan started there can capture the
                 pointer, which would retarget the trailing click to the body and the
                 link deletion would never fire. */}
             <path
@@ -304,5 +303,7 @@ function roundCorners(points: Array<[number, number]>, radius = 6): string {
   parts.push(`L ${last[0]},${last[1]}`);
   return parts.join(' ');
 }
+
+export const DependencyLinks = React.memo(DependencyLinksComponent);
 
 DependencyLinks.displayName = 'DependencyLinks';

@@ -36,7 +36,7 @@ interface TaskListProps {
   onToggleCollapsed: () => void;
 }
 
-export function TaskList({
+function TaskListComponent({
   rows,
   columns = defaultColumns,
   getStyles,
@@ -58,7 +58,7 @@ export function TaskList({
   return (
     <div {...getStyles('taskList')} data-collapsed={collapsed || undefined}>
       {/* Header */}
-      <div {...getStyles('taskListHeader')} style={{ gridTemplateColumns }}>
+      <div {...getStyles('taskListHeader', { style: { gridTemplateColumns } })}>
         {columns.map((col, i) => (
           <div key={i} {...getStyles('taskListCell')}>
             {col.header}
@@ -95,9 +95,8 @@ export function TaskList({
             return (
               <div
                 key={row.task.id}
-                {...getStyles('taskListRow')}
+                {...getStyles('taskListRow', { style: { gridTemplateColumns } })}
                 data-selected={row.task.id === selectedTaskId || undefined}
-                style={{ gridTemplateColumns }}
               >
                 {columns.map((col, i) => {
                   const content = col.render(task, locale, row);
@@ -147,5 +146,7 @@ export function TaskList({
     </div>
   );
 }
+
+export const TaskList = React.memo(TaskListComponent);
 
 TaskList.displayName = 'TaskList';

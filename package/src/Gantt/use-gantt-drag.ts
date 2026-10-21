@@ -168,24 +168,27 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
         return;
       }
       const rect = body.getBoundingClientRect();
+      // 0 at the threshold, full speed at the edge - and no faster past it.
+      const speed = (distance: number) =>
+        Math.ceil(Math.min(1, 1 - distance / EDGE_THRESHOLD) * MAX_SCROLL_SPEED);
       let vx = 0;
       let vy = 0;
 
       const fromLeft = clientX - rect.left;
       const fromRight = rect.right - clientX;
       if (fromLeft < EDGE_THRESHOLD) {
-        vx = -Math.ceil((1 - fromLeft / EDGE_THRESHOLD) * MAX_SCROLL_SPEED);
+        vx = -speed(fromLeft);
       } else if (fromRight < EDGE_THRESHOLD) {
-        vx = Math.ceil((1 - fromRight / EDGE_THRESHOLD) * MAX_SCROLL_SPEED);
+        vx = speed(fromRight);
       }
 
       if (allowVertical) {
         const fromTop = clientY - rect.top;
         const fromBottom = rect.bottom - clientY;
         if (fromTop < EDGE_THRESHOLD) {
-          vy = -Math.ceil((1 - fromTop / EDGE_THRESHOLD) * MAX_SCROLL_SPEED);
+          vy = -speed(fromTop);
         } else if (fromBottom < EDGE_THRESHOLD) {
-          vy = Math.ceil((1 - fromBottom / EDGE_THRESHOLD) * MAX_SCROLL_SPEED);
+          vy = speed(fromBottom);
         }
       }
 
@@ -215,7 +218,11 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
           }
           return;
         }
-        if (Math.abs(e.clientX - drag.startClientX) < DRAG_ACTIVATION_DISTANCE) {
+        // Only horizontal travel moves/resizes a bar, but a link may go straight down.
+        const dx = e.clientX - drag.startClientX;
+        const travel =
+          drag.type === 'link' ? Math.hypot(dx, e.clientY - drag.startClientY) : Math.abs(dx);
+        if (travel < DRAG_ACTIVATION_DISTANCE) {
           return;
         }
         drag.moved = true;
@@ -256,16 +263,16 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
         announce?.('Link not created: it would create a circular dependency');
         return;
       }
+      const target = tasks.find((task) => task.id === toTaskId);
+      const deps = target?.dependencies ?? [];
+      // Already linked (any type): nothing changes, so nothing is emitted.
+      if (!target || deps.some((dep) => normalizeDependency(dep).taskId === drag.taskId)) {
+        return;
+      }
       commitTasks(
-        tasks.map((task) => {
-          if (task.id !== toTaskId) {
-            return task;
-          }
-          const deps = task.dependencies || [];
-          return deps.some((dep) => normalizeDependency(dep).taskId === drag.taskId)
-            ? task
-            : { ...task, dependencies: [...deps, drag.taskId] };
-        })
+        tasks.map((task) =>
+          task === target ? { ...task, dependencies: [...deps, drag.taskId] } : task
+        )
       );
       onLinkCreate?.(drag.taskId, toTaskId);
       return;
@@ -453,19 +460,20 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       optsRef.current;
     const dragged = tasks.find((t) => t.id === taskId);
     // Milestones have no length: resize is a no-op (TaskBar ignores Shift+Arrow too).
-    if (action === 'resize' && dragged?.type === 'milestone') {
+    if (!dragged || (action === 'resize' && dragged.type === 'milestone')) {
       return;
     }
-    let next = tasks.map((task) => {
-      if (task.id !== taskId) {
-        return task;
-      }
-      // Keyboard resize changes the duration itself: a one-calendar-day step from a Friday
-      // would land on Saturday and add no working day.
-      return action === 'move'
-        ? { ...task, ...shiftTask(task, 'move', days, isNonWorkingDay) }
-        : { ...task, duration: Math.max(1, task.duration + days) };
-    });
+    // Keyboard resize changes the duration itself: a one-calendar-day step from a Friday
+    // would land on Saturday and add no working day.
+    const shifted =
+      action === 'move'
+        ? shiftTask(dragged, 'move', days, isNonWorkingDay)
+        : { startDate: dragged.startDate, duration: Math.max(1, dragged.duration + days) };
+    // Clamped to the same schedule (a one-day task can't shrink): nothing to emit.
+    if (shifted.startDate === dragged.startDate && shifted.duration === dragged.duration) {
+      return;
+    }
+    let next = tasks.map((task) => (task === dragged ? { ...task, ...shifted } : task));
     if (autoSchedule) {
       next = applyAutoSchedule(next, taskId, isNonWorkingDay);
     }
