@@ -1,8 +1,8 @@
 import '@mantine/core/styles.css';
 import '@mantine/code-highlight/styles.css';
-import '@mantinex/mantine-logo/styles.css';
-import '@mantinex/mantine-header/styles.css';
 import '@mantinex/demo/styles.css';
+import '@mantinex/mantine-header/styles.css';
+import '@mantinex/mantine-logo/styles.css';
 import 'mantine-gantt/styles.css';
 
 import React from 'react';

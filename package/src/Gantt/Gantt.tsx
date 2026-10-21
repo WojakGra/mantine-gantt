@@ -95,7 +95,7 @@ const varsResolver = createVarsResolver<GanttFactory>(
   })
 );
 
-export const Gantt = factory<GanttFactory>((_props, ref) => {
+export const Gantt = factory<GanttFactory>((_props) => {
   const props = useProps('Gantt', defaultProps, _props);
   const theme = useMantineTheme();
   const {
@@ -141,6 +141,7 @@ export const Gantt = factory<GanttFactory>((_props, ref) => {
     workingDays,
     onColumnWidthChange,
     showDragLabel,
+    ref,
     ...others
   } = props;
 

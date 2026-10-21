@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`mantine-gantt` - a single-component npm library: an interactive Gantt chart for [Mantine](https://mantine.dev/). React 18/19, TypeScript, drag interactions on plain pointer events (no drag library), `dayjs` for dates. The published package lives in `package/`; `docs/` is a Next.js docs site. Yarn 4 (Berry) workspace, Node 24 (`.nvmrc`).
+`mantine-gantt` - a single-component npm library: an interactive Gantt chart for [Mantine](https://mantine.dev/). React 18/19, TypeScript, drag interactions on plain pointer events (no drag library), `dayjs` for dates. The published package lives in `package/`; `docs/` is a Next.js docs site. Yarn 4 (Berry, via Corepack - run `corepack enable` once) workspace, Node 24 (`.nvmrc`).
 
 The root `package.json` (`name: m-90d2bb8`) is **not** published - it only holds scripts and devDependencies. The published manifest is `package/package.json`. Bump versions there (or via the release scripts), never in the root.
 
@@ -13,11 +13,11 @@ The root `package.json` (`name: m-90d2bb8`) is **not** published - it only holds
 Run from repo root unless noted.
 
 - `yarn build` - Rollup build of `package/src` → `package/dist` (ESM + CJS + CSS), then generate `.d.ts` (`scripts/generate-dts`) and process CSS (`scripts/prepare-css`).
-- `yarn test` - full CI gate: `syncpack` + `prettier:check` + `typecheck` + `lint` (eslint + stylelint) + `jest`. Run this before claiming work is done.
+- `yarn test` - full CI gate: `syncpack` + `format:test` + `typecheck` + `lint` (oxlint + stylelint) + `jest`. Run this before claiming work is done.
 - `yarn jest` - Jest only. Single file: `yarn jest package/src/Gantt/utils.test.ts`. Single test: `yarn jest -t 'snapToGrid'`.
 - `yarn typecheck` - `tsc --noEmit` for the package, then the docs site's own typecheck.
-- `yarn eslint` / `yarn stylelint` - lint TS/TSX and CSS separately (both cached).
-- `yarn prettier:write` - format. Import order is enforced by `@ianvs/prettier-plugin-sort-imports`; let Prettier sort, don't hand-order imports.
+- `yarn oxlint` / `yarn stylelint` - lint TS/TSX and CSS separately.
+- `yarn format:write` - format with oxfmt (config from `oxc-config-mantine`). oxfmt also sorts imports; let it sort, don't hand-order imports.
 - `yarn dev` - run the docs site (Next.js) for manual testing.
 - `yarn storybook` - Storybook on port 8271; stories are `package/src/**/*.story.tsx`.
 - `yarn release:patch|minor|major` - bump `package/package.json`, publish, then build & deploy docs to GitHub Pages. Maintainer-only; don't run unprompted.
