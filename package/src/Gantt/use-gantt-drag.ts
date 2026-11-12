@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { GanttDragType, GanttTask } from './types';
+import type { GanttDragType, GanttLabels, GanttTask } from './types';
 import {
   applyAutoSchedule,
   normalizeDependency,
@@ -55,6 +55,7 @@ export interface UseGanttDragOptions {
   isNonWorkingDay?: IsNonWorkingDay;
   /** Push a message to the aria-live region (drag/keyboard commits). */
   announce?: (message: string) => void;
+  labels: GanttLabels;
 }
 
 interface DragRef {
@@ -251,6 +252,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
       autoSchedule,
       isNonWorkingDay,
       announce,
+      labels,
       bodyRef,
     } = optsRef.current;
 
@@ -260,7 +262,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
         return;
       }
       if (wouldCreateCycle(tasks, drag.taskId, toTaskId)) {
-        announce?.('Link not created: it would create a circular dependency');
+        announce?.(labels.linkCycle);
         return;
       }
       const target = tasks.find((task) => task.id === toTaskId);
@@ -310,7 +312,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
     const updated = next.find((t) => t.id === drag.taskId);
     if (updated) {
       onTaskUpdate?.(updated);
-      announce?.(`${updated.label} ${updated.startDate}, ${updated.duration} day duration`);
+      announce?.(labels.taskUpdated(updated));
     }
   }, []);
 
@@ -456,7 +458,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
   );
 
   const nudge = useCallback((taskId: string, action: 'move' | 'resize', days: number) => {
-    const { tasks, commitTasks, onTaskUpdate, autoSchedule, isNonWorkingDay, announce } =
+    const { tasks, commitTasks, onTaskUpdate, autoSchedule, isNonWorkingDay, announce, labels } =
       optsRef.current;
     const dragged = tasks.find((t) => t.id === taskId);
     // Milestones have no length: resize is a no-op (TaskBar ignores Shift+Arrow too).
@@ -482,7 +484,7 @@ export function useGanttDrag(options: UseGanttDragOptions): UseGanttDragReturn {
     const updated = next.find((t) => t.id === taskId);
     if (updated) {
       onTaskUpdate?.(updated);
-      announce?.(`${updated.label} ${updated.startDate}, ${updated.duration} day duration`);
+      announce?.(labels.taskUpdated(updated));
     }
   }, []);
 

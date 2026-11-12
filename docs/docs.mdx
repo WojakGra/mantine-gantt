@@ -36,6 +36,21 @@ still snap to whole days. `weekStart` controls the header's week numbering and t
 `locale` (default `'en'`) sets the language of month names and dates - pass `'de'`, or
 `navigator.language` to follow the browser.
 
+`labels` translates the rest: the default column headers, the week header, `aria-label`s and
+screen-reader announcements. Pass only the ones you need, the others stay English. Keep the
+object stable (a module constant or `useMemo`):
+
+```tsx
+const labels: Partial<GanttLabels> = {
+  taskName: 'Zadanie',
+  duration: 'Czas',
+  days: (count) => `${count} dni`,
+  week: (weekNumber) => `Tydz. ${weekNumber}`,
+};
+
+<Gantt tasks={tasks} locale="pl" labels={labels} />;
+```
+
 <Demo data={demos.viewMode} />
 
 ## Navigation, zoom and selection
@@ -127,7 +142,9 @@ task that starts on Friday ends the next Thursday and its bar stretches across t
 - A task dropped on a non-working day snaps to the next working day in the direction it moved.
 - Resizing recounts the working days between the bar's new ends.
 - `autoSchedule` places successors on working days.
-- `isNonWorkingDay` defines the calendar, so holidays work the same way as weekends.
+- `isNonWorkingDay` defines the calendar, so holidays work the same way as weekends. The
+  default is exported as `isWeekend`, to build on:
+  `isNonWorkingDay={(date) => isWeekend(date) || isHoliday(date)}`.
 
 A custom column gets the computed row as a third argument; `row.span` is the number of calendar
 days the bar covers, which is what you need to print an end date:
@@ -146,7 +163,9 @@ const endColumn: GanttColumn = {
 
 ## Deleting dependency links
 
-Click a dependency arrow to delete that link. The component removes the source id from the
+Click a dependency arrow to delete that link - or Tab to it and press Delete, Backspace, Enter
+or Space. Set `withLinkDelete={false}` to keep links fixed while the rest of the chart stays
+editable. The component removes the source id from the
 target's `dependencies` and fires `onLinkDelete(fromTaskId, toTaskId, type)` alongside `onTasksChange`,
 mirroring how link creation works.
 

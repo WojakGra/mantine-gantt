@@ -1,5 +1,5 @@
 import dayjs, { Dayjs } from 'dayjs';
-import isoWeek from 'dayjs/plugin/isoWeek';
+import isoWeek from 'dayjs/plugin/isoWeek.js';
 import type { GanttDependency, GanttDragType, GanttTask, GanttTreeRow } from './types';
 
 dayjs.extend(isoWeek);

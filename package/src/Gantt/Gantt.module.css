@@ -323,6 +323,18 @@
   background-color: light-dark(rgb(0, 0, 0, 0.08), rgb(255, 255, 255, 0.08));
 }
 
+/* Day view: every day line is this one element, masked down to the last pixel of each
+   column - so `background-color` still sets the line color. */
+.gridLine[data-days] {
+  left: 0;
+  width: 100%;
+  mask-image: repeating-linear-gradient(
+    to right,
+    transparent 0 calc(var(--gantt-column-width) - 1px),
+    #000 calc(var(--gantt-column-width) - 1px) var(--gantt-column-width)
+  );
+}
+
 .majorGridLine {
   position: absolute;
   top: 0;
@@ -723,6 +735,16 @@
    sibling via :hover on the group. */
 g:hover .dependencyLine:not([data-hit]) {
   stroke: light-dark(var(--mantine-color-gray-8), var(--mantine-color-gray-4));
+  stroke-width: 2.5;
+}
+
+/* Keyboard focus lands on the hit overlay; the visible line right after it shows it. */
+.dependencyLine[data-hit]:focus {
+  outline: none;
+}
+
+.dependencyLine[data-hit]:focus-visible + .dependencyLine {
+  stroke: var(--mantine-primary-color-filled);
   stroke-width: 2.5;
 }
 

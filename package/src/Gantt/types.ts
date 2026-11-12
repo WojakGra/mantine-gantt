@@ -84,6 +84,36 @@ export interface GanttTask {
   };
 }
 
+/** Every text the chart renders or announces; override any of them through `labels` */
+export interface GanttLabels {
+  /** Default column headers */
+  taskName: string;
+  start: string;
+  end: string;
+  duration: string;
+  /** Short duration: the default Duration column and the drag readout */
+  days: (count: number) => string;
+  /** Week header cell */
+  week: (weekNumber: number) => string;
+  /** `aria-label` of the task list toggle */
+  expandTaskList: string;
+  collapseTaskList: string;
+  /** `aria-label` of a parent row's chevron */
+  expandTask: (label: string) => string;
+  collapseTask: (label: string) => string;
+  /** `aria-label` of a bar; `editable` is false for summary, locked and read-only bars */
+  taskBar: (task: GanttTask, kind: 'task' | 'milestone' | 'summary', editable: boolean) => string;
+  /** Screen-reader announcement after a move or resize */
+  taskUpdated: (task: GanttTask) => string;
+  /** Screen-reader announcement when a link is refused because it would close a cycle */
+  linkCycle: string;
+  /**
+   * `aria-label` of a dependency line; activating the line deletes the link. Include `type`:
+   * one pair of tasks can be tied by several links that differ only by it.
+   */
+  deleteLink: (fromLabel: string, toLabel: string, type: GanttDependencyType) => string;
+}
+
 /** A visible row produced by buildTaskTree: the original task plus its effective schedule */
 export interface GanttTreeRow {
   task: GanttTask;
@@ -180,6 +210,13 @@ export interface GanttBaseProps {
   onLinkDelete?: (fromTaskId: string, toTaskId: string, type: GanttDependencyType) => void;
 
   /**
+   * Let the user delete a dependency link by clicking its line, or by focusing it and
+   * pressing Delete, Backspace, Enter or Space. `readOnly` turns it off too.
+   * <br>Default: `true`
+   */
+  withLinkDelete?: boolean;
+
+  /**
    * Automatically push dependent tasks later when a task is moved or resized, so their
    * dependencies (any type, with lag) hold again. Tasks are never pulled earlier. Only leaf
    * tasks move: a dependency on a parent uses the span of its children, while a parent's own
@@ -255,6 +292,13 @@ export interface GanttBaseProps {
    * <br>Default: `'en'`
    */
   locale?: string;
+
+  /**
+   * Translations for the texts `locale` does not cover: column headers, the week header,
+   * `aria-label`s and screen-reader announcements. Merged over the English defaults. Keep
+   * the object stable (module constant or `useMemo`) - a new one re-renders every bar.
+   */
+  labels?: Partial<GanttLabels>;
 
   /**
    * Whether to show task titles on hover

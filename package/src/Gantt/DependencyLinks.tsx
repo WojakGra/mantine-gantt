@@ -5,6 +5,7 @@ import type {
   GanttDependencyType,
   GanttDragType,
   GanttFactory,
+  GanttLabels,
   GanttTask,
   GanttTreeRow,
 } from './types';
@@ -32,7 +33,9 @@ interface DependencyLinksProps {
   /** Virtualized row range `[firstRow, lastRow)`; links entirely above or below it are skipped. */
   firstRow?: number;
   lastRow?: number;
-  /** Called with (fromTaskId, toTaskId, type) when a rendered dependency line is clicked. */
+  labels: GanttLabels;
+  /** Called with (fromTaskId, toTaskId, type) when a rendered dependency line is activated;
+   *  omitted = links can't be deleted and get no hit area. */
   onLinkClick?: (fromTaskId: string, toTaskId: string, type: GanttDependencyType) => void;
 }
 
@@ -49,6 +52,7 @@ function DependencyLinksComponent({
   criticalIds,
   firstRow = 0,
   lastRow = Infinity,
+  labels,
   onLinkClick,
 }: DependencyLinksProps) {
   // Marker id must be unique per instance: two charts on one page would otherwise share
@@ -71,6 +75,7 @@ function DependencyLinksComponent({
       fromId: string;
       toId: string;
       type: GanttDependencyType;
+      label: string;
       points: string;
       critical: boolean;
     }> = [];
@@ -139,6 +144,7 @@ function DependencyLinksComponent({
           fromId,
           toId: toTask.id,
           type,
+          label: labels.deleteLink(fromTask.label, toTask.label, type),
           // Path data ("M ... Q ..."), rendered into a <path d>.
           points,
           critical: (criticalIds?.has(fromId) && criticalIds?.has(toTask.id)) || false,
@@ -159,6 +165,7 @@ function DependencyLinksComponent({
     criticalIds,
     firstRow,
     lastRow,
+    labels,
   ]);
 
   if (links.length === 0 && !linkPreview) {
@@ -194,13 +201,24 @@ function DependencyLinksComponent({
                 pointerdown must not reach .timelineBody: a pan started there can capture the
                 pointer, which would retarget the trailing click to the body and the
                 link deletion would never fire. */}
-            <path
-              {...getStyles('dependencyLine')}
-              data-hit
-              d={link.points}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={onLinkClick ? () => onLinkClick(fromId, toId, type) : undefined}
-            />
+            {onLinkClick && (
+              <path
+                {...getStyles('dependencyLine')}
+                data-hit
+                d={link.points}
+                role="button"
+                tabIndex={0}
+                aria-label={link.label}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onLinkClick(fromId, toId, type)}
+                onKeyDown={(e) => {
+                  if (['Delete', 'Backspace', 'Enter', ' '].includes(e.key)) {
+                    e.preventDefault();
+                    onLinkClick(fromId, toId, type);
+                  }
+                }}
+              />
+            )}
             <path
               {...getStyles('dependencyLine')}
               data-critical={link.critical || undefined}

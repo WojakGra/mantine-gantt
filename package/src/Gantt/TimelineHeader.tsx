@@ -1,7 +1,7 @@
 import type { Dayjs } from 'dayjs';
 import React, { useMemo } from 'react';
 import type { GetStylesApi } from '@mantine/core';
-import type { GanttFactory } from './types';
+import type { GanttFactory, GanttLabels } from './types';
 import { formatDate, generateDayHeaders, generateWeekHeaders } from './utils';
 
 interface TimelineHeaderProps {
@@ -13,7 +13,11 @@ interface TimelineHeaderProps {
   viewMode: 'day' | 'week' | 'month';
   weekStart: 0 | 1;
   locale: string;
+  labels: GanttLabels;
   isNonWorkingDay?: (date: Date) => boolean;
+  /** Day columns `[firstDay, lastDay)` to render in day view; the rest is padding. */
+  firstDay: number;
+  lastDay: number;
   /** `YYYY-MM-DD`; a prop so the memoized header follows the date after midnight */
   today: string;
 }
@@ -27,7 +31,10 @@ function TimelineHeaderComponent({
   viewMode,
   weekStart,
   locale,
+  labels,
   isNonWorkingDay,
+  firstDay,
+  lastDay,
   today,
 }: TimelineHeaderProps) {
   const dayHeaders = useMemo(
@@ -82,17 +89,19 @@ function TimelineHeaderComponent({
               key={index}
               {...getStyles('timelineHeaderCell', { style: { width: week.days * columnWidth } })}
             >
-              Week {week.weekNumber}
+              {labels.week(week.weekNumber)}
             </div>
           ))}
         </div>
       )}
 
       {viewMode === 'day' && (
-        <div {...getStyles('timelineHeaderRow')}>
-          {dayHeaders.map((day, index) => (
+        <div
+          {...getStyles('timelineHeaderRow', { style: { paddingLeft: firstDay * columnWidth } })}
+        >
+          {dayHeaders.slice(firstDay, lastDay).map((day, index) => (
             <div
-              key={index}
+              key={firstDay + index}
               {...getStyles('timelineHeaderCell')}
               data-weekend={day.isWeekend || undefined}
               data-today={day.date.isSame(today, 'day') || undefined}
