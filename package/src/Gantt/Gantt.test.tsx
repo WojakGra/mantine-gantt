@@ -1542,6 +1542,15 @@ describe('fresh task, labels, link keyboard deletion, column virtualization', ()
     expect(bar()).toHaveAttribute('aria-label', '0 deps');
   });
 
+  it('columnWidth below 1px is floored in the CSS variable too', () => {
+    const { container } = render(<Gantt tasks={mockTasks} columnWidth={0} />);
+    expect(
+      container
+        .querySelector<HTMLElement>('.mantine-Gantt-root')!
+        .style.getPropertyValue('--gantt-column-width')
+    ).toBe('1px');
+  });
+
   it('deletes a focused link with the keyboard', () => {
     const onLinkDelete = jest.fn();
     const { container } = render(<Gantt defaultTasks={mockTasks} onLinkDelete={onLinkDelete} />);

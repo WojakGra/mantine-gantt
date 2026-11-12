@@ -100,7 +100,9 @@ const defaultProps: Partial<GanttProps> = {
 const varsResolver = createVarsResolver<GanttFactory>(
   (theme, { columnWidth, rowHeight, taskListWidth, columns, criticalPathColor }) => ({
     root: {
-      '--gantt-column-width': `${columnWidth}px`,
+      // Same ≥1px floor as effectiveColumnWidth: the day header cells and the day-line mask
+      // size themselves from this variable.
+      '--gantt-column-width': `${Math.max(columnWidth ?? 40, 1)}px`,
       '--gantt-row-height': `${rowHeight}px`,
       '--gantt-header-height': '50px',
       '--gantt-task-list-width': `${resolveTaskListWidth(taskListWidth, columns)}px`,
