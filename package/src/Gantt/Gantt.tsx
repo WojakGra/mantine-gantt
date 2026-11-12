@@ -797,6 +797,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
             {visibleRows.map((row, i) => {
               const index = firstRow + i;
               const task = getEffectiveTask(row);
+              const isLocked = readOnly || task.locked;
               return (
                 <div
                   key={task.id}
@@ -812,7 +813,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
                     span={row.span}
                     isNonWorkingDay={calendar}
                     isSummary={row.hasChildren}
-                    isLocked={readOnly || task.locked}
+                    isLocked={isLocked}
                     isDragging={active?.taskId === task.id && active.type !== 'link'}
                     isLinkTarget={active?.type === 'link' && active.dropTargetId === task.id}
                     dragType={active?.taskId === task.id ? active.type : null}
@@ -822,6 +823,15 @@ export const Gantt = factory<GanttFactory>((_props) => {
                     nudge={drag.nudge}
                     locale={locale}
                     labels={labels}
+                    ariaLabel={labels.taskBar(
+                      task,
+                      row.hasChildren
+                        ? 'summary'
+                        : task.type === 'milestone'
+                          ? 'milestone'
+                          : 'task',
+                      !row.hasChildren && !isLocked
+                    )}
                     onTaskClick={handleTaskClick}
                     isCritical={criticalIds.has(task.id)}
                     isSelected={task.id === selectedTaskId}

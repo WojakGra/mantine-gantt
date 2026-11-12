@@ -1528,13 +1528,27 @@ describe('fresh task, labels, link keyboard deletion, column virtualization', ()
     );
   });
 
+  it('a custom bar label follows task fields the bar does not draw', () => {
+    const labels = { taskBar: (task: GanttTask) => `${task.dependencies?.length ?? 0} deps` };
+    const app = (tasks: GanttTask[]) => (
+      <MantineProvider>
+        <Gantt tasks={tasks} labels={labels} />
+      </MantineProvider>
+    );
+    const { container, rerender } = renderPlain(app(mockTasks));
+    const bar = () => container.querySelector('[role="button"][data-task-id="2"]');
+    expect(bar()).toHaveAttribute('aria-label', '1 deps');
+    rerender(app(mockTasks.map((t) => (t.id === '2' ? { ...t, dependencies: [] } : t))));
+    expect(bar()).toHaveAttribute('aria-label', '0 deps');
+  });
+
   it('deletes a focused link with the keyboard', () => {
     const onLinkDelete = jest.fn();
     const { container } = render(<Gantt defaultTasks={mockTasks} onLinkDelete={onLinkDelete} />);
     const line = container.querySelector(hitLine)!;
     expect(line).toHaveAttribute(
       'aria-label',
-      'Delete dependency from Project Planning to Requirements Analysis'
+      'Delete finish-to-start dependency from Project Planning to Requirements Analysis'
     );
     fireEvent.keyDown(line, { key: 'a' });
     expect(onLinkDelete).not.toHaveBeenCalled();

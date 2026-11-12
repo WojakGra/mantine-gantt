@@ -1,4 +1,11 @@
-import type { GanttLabels } from './types';
+import type { GanttDependencyType, GanttLabels } from './types';
+
+const dependencyNames: Record<GanttDependencyType, string> = {
+  FS: 'finish-to-start',
+  SS: 'start-to-start',
+  FF: 'finish-to-finish',
+  SF: 'start-to-finish',
+};
 
 export const defaultLabels: GanttLabels = {
   taskName: 'Task Name',
@@ -24,5 +31,6 @@ export const defaultLabels: GanttLabels = {
   },
   taskUpdated: (task) => `${task.label} ${task.startDate}, ${task.duration} day duration`,
   linkCycle: 'Link not created: it would create a circular dependency',
-  deleteLink: (fromLabel, toLabel) => `Delete dependency from ${fromLabel} to ${toLabel}`,
+  deleteLink: (fromLabel, toLabel, type) =>
+    `Delete ${dependencyNames[type]} dependency from ${fromLabel} to ${toLabel}`,
 };

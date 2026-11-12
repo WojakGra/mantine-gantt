@@ -107,8 +107,11 @@ export interface GanttLabels {
   taskUpdated: (task: GanttTask) => string;
   /** Screen-reader announcement when a link is refused because it would close a cycle */
   linkCycle: string;
-  /** `aria-label` of a dependency line; activating the line deletes the link */
-  deleteLink: (fromLabel: string, toLabel: string) => string;
+  /**
+   * `aria-label` of a dependency line; activating the line deletes the link. Include `type`:
+   * one pair of tasks can be tied by several links that differ only by it.
+   */
+  deleteLink: (fromLabel: string, toLabel: string, type: GanttDependencyType) => string;
 }
 
 /** A visible row produced by buildTaskTree: the original task plus its effective schedule */

@@ -144,7 +144,7 @@ function DependencyLinksComponent({
           fromId,
           toId: toTask.id,
           type,
-          label: labels.deleteLink(fromTask.label, toTask.label),
+          label: labels.deleteLink(fromTask.label, toTask.label, type),
           // Path data ("M ... Q ..."), rendered into a <path d>.
           points,
           critical: (criticalIds?.has(fromId) && criticalIds?.has(toTask.id)) || false,

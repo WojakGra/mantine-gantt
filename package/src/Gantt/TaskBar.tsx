@@ -46,6 +46,8 @@ interface TaskBarProps {
   onTaskClick?: (task: GanttTask) => void;
   locale: string;
   labels: GanttLabels;
+  /** Built by Gantt from the current task: this bar's memo ignores fields it does not draw. */
+  ariaLabel: string;
 }
 
 function TaskBarComponent({
@@ -71,6 +73,7 @@ function TaskBarComponent({
   onTaskClick,
   locale,
   labels,
+  ariaLabel,
 }: TaskBarProps) {
   const theme = useMantineTheme();
   const formatTaskDate = (date: string | Dayjs) => formatDate(date, locale);
@@ -135,11 +138,7 @@ function TaskBarComponent({
       data-locked={isLocked || undefined}
       data-milestone={isMilestone || undefined}
       data-selected={isSelected || undefined}
-      aria-label={labels.taskBar(
-        task,
-        isSummary ? 'summary' : isMilestone ? 'milestone' : 'task',
-        !inert
-      )}
+      aria-label={ariaLabel}
       onPointerDown={inert ? undefined : (e) => startDrag('move', task.id, e)}
       onClick={() => {
         if (didDrag()) {
@@ -257,6 +256,7 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.onTaskClick === nextProps.onTaskClick &&
     prevProps.locale === nextProps.locale &&
     prevProps.labels === nextProps.labels &&
+    prevProps.ariaLabel === nextProps.ariaLabel &&
     prevProps.getStyles === nextProps.getStyles &&
     prevProps.startDate.isSame(nextProps.startDate)
   );
