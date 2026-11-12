@@ -1,6 +1,6 @@
 # Mantine Gantt
 
-An interactive Gantt chart component for [Mantine](https://mantine.dev/). React 18/19, TypeScript, drag interactions on plain pointer events, `dayjs` for dates.
+An interactive Gantt chart component for [Mantine](https://mantine.dev/). React 19.2+, TypeScript, drag interactions on plain pointer events, `dayjs` for dates.
 
 [![npm version](https://img.shields.io/npm/v/mantine-gantt.svg)](https://www.npmjs.com/package/mantine-gantt)
 [![npm downloads](https://img.shields.io/npm/dm/mantine-gantt.svg)](https://www.npmjs.com/package/mantine-gantt)

@@ -1493,3 +1493,88 @@ describe('row virtualization', () => {
     expect(onRender).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('fresh task, labels, link keyboard deletion, column virtualization', () => {
+  const hitLine = 'path[class*="dependencyLine"][data-hit]';
+
+  it('onTaskClick gets the current task after a field the bar does not draw changes', () => {
+    const onTaskClick = jest.fn();
+    const app = (tasks: GanttTask[]) => (
+      <MantineProvider>
+        <Gantt tasks={tasks} onTaskClick={onTaskClick} />
+      </MantineProvider>
+    );
+    const { container, rerender } = renderPlain(app(mockTasks));
+    rerender(app(mockTasks.map((t) => (t.id === '2' ? { ...t, dependencies: [] } : t))));
+    fireEvent.click(container.querySelector('[role="button"][data-task-id="2"]')!);
+    expect(onTaskClick.mock.calls[0][0].dependencies).toEqual([]);
+  });
+
+  it('labels override the built-in texts and keep the rest', () => {
+    const { container } = render(
+      <Gantt
+        tasks={mockTasks}
+        viewMode="week"
+        labels={{ taskName: 'Zadanie', week: (n) => `Tydz. ${n}`, days: (n) => `${n} dni` }}
+      />
+    );
+    expect(screen.getByText('Zadanie')).toBeInTheDocument();
+    expect(screen.getByText('5 dni')).toBeInTheDocument();
+    expect(screen.getAllByText(/^Tydz\. \d+$/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Start')).toBeInTheDocument();
+    expect(container.querySelector('[data-task-id="1"]')).toHaveAttribute(
+      'aria-label',
+      'Project Planning, starts 2026-02-01, 5 day duration. Arrow keys move, Shift+Arrow resize.'
+    );
+  });
+
+  it('deletes a focused link with the keyboard', () => {
+    const onLinkDelete = jest.fn();
+    const { container } = render(<Gantt defaultTasks={mockTasks} onLinkDelete={onLinkDelete} />);
+    const line = container.querySelector(hitLine)!;
+    expect(line).toHaveAttribute(
+      'aria-label',
+      'Delete dependency from Project Planning to Requirements Analysis'
+    );
+    fireEvent.keyDown(line, { key: 'a' });
+    expect(onLinkDelete).not.toHaveBeenCalled();
+    fireEvent.keyDown(line, { key: 'Delete' });
+    expect(onLinkDelete).toHaveBeenCalledWith('1', '2', 'FS');
+    expect(container.querySelectorAll(hitLine)).toHaveLength(1);
+  });
+
+  it('withLinkDelete={false} draws the links without a delete target', () => {
+    const { container } = render(<Gantt defaultTasks={mockTasks} withLinkDelete={false} />);
+    expect(container.querySelectorAll(hitLine)).toHaveLength(0);
+    expect(container.querySelectorAll('path[class*="dependencyLine"]')).toHaveLength(2);
+  });
+
+  it('day view renders only the day columns near the viewport and one element for the lines', () => {
+    const width = jest.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
+    try {
+      const { container } = render(
+        <Gantt
+          tasks={mockTasks}
+          startDate={new Date(2026, 0, 1)}
+          endDate={new Date(2026, 11, 31)}
+        />
+      );
+      const cells = () => container.querySelectorAll('.mantine-Gantt-timelineHeaderCell');
+      // (0 + 200 step + 800 viewport + 400 overscan) / 40px = 35 of 365 days
+      expect(cells()).toHaveLength(35);
+      expect(container.querySelectorAll('.mantine-Gantt-gridLine')).toHaveLength(1);
+
+      fireEvent.scroll(container.querySelector('.mantine-Gantt-timelineBody')!, {
+        target: { scrollLeft: 4000 },
+      });
+      // days [90, 135): Apr 1 is day 90
+      expect(cells()).toHaveLength(45);
+      expect(cells()[0]).toHaveTextContent('1');
+      expect(container.querySelector('.mantine-Gantt-timelineHeaderRow')).toHaveStyle({
+        paddingLeft: '3600px',
+      });
+    } finally {
+      width.mockRestore();
+    }
+  });
+});

@@ -12,6 +12,7 @@ import {
 } from '@mantine/core';
 import { useCallbackRef, useMergedRef, useUncontrolled } from '@mantine/hooks';
 import { DependencyLinks } from './DependencyLinks';
+import { defaultLabels } from './labels';
 import { TaskBar } from './TaskBar';
 import { defaultColumns, TaskList } from './TaskList';
 import { TimelineGrid } from './TimelineGrid';
@@ -52,6 +53,12 @@ const MIN_TIMELINE_WIDTH = 240;
 // Row range to render before the timeline body has been measured (first render, SSR, jsdom).
 const UNMEASURED_VIEWPORT_HEIGHT = 1200;
 
+// Horizontal scroll is tracked in steps of this many px, so a pan re-renders only now and then.
+const SCROLL_LEFT_STEP = 200;
+
+// Day columns kept rendered on each side of the visible ones.
+const DAY_OVERSCAN_PX = 400;
+
 // Stable empty set so the reference doesn't change on every render when the feature is off.
 const EMPTY_CRITICAL = new Set<string>();
 
@@ -87,6 +94,7 @@ const defaultProps: Partial<GanttProps> = {
   showBaselines: true,
   autoSchedule: false,
   showDragLabel: true,
+  withLinkDelete: true,
 };
 
 const varsResolver = createVarsResolver<GanttFactory>(
@@ -120,6 +128,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
     onTaskClick,
     onLinkCreate,
     onLinkDelete,
+    withLinkDelete,
     columnWidth = 40,
     rowHeight = 44,
     taskListWidth,
@@ -134,6 +143,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
     viewMode = 'day',
     weekStart = 1,
     locale = 'en',
+    labels: labelsProp,
     highlightCriticalPath,
     criticalPathColor,
     showBaselines,
@@ -195,6 +205,8 @@ export const Gantt = factory<GanttFactory>((_props) => {
         return Math.max(baseColumnWidth, 1);
     }
   }, [viewMode, baseColumnWidth]);
+
+  const labels = useMemo(() => ({ ...defaultLabels, ...labelsProp }), [labelsProp]);
 
   // Working-day calendar for all schedule math; undefined = durations are calendar days.
   const calendar = workingDays ? (isNonWorkingDay ?? isWeekend) : undefined;
@@ -260,6 +272,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
   // even when the tasks span fewer days than the viewport, the height drives row virtualization.
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [scrollTop, setScrollTop] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
   // Task list collapse: the user's (or consumer's) choice wins; until there is one, follow
   // the container width so a phone starts on the timeline instead of a clipped list.
@@ -297,6 +310,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
     autoSchedule,
     isNonWorkingDay: calendar,
     announce: setAnnouncement,
+    labels,
   });
   const active = drag.state;
 
@@ -365,6 +379,22 @@ export const Gantt = factory<GanttFactory>((_props) => {
   );
   const timelineWidth = totalDays * effectiveColumnWidth;
 
+  // Column virtualization for the per-day nodes (day header cells, non-working shading), which
+  // only day view renders. Unmeasured (first render, jsdom): everything.
+  const [firstDay, lastDay] =
+    viewMode === 'day' && viewport.width > 0
+      ? [
+          Math.max(0, Math.floor((scrollLeft - DAY_OVERSCAN_PX) / effectiveColumnWidth)),
+          Math.min(
+            totalDays,
+            Math.ceil(
+              (scrollLeft + SCROLL_LEFT_STEP + viewport.width + DAY_OVERSCAN_PX) /
+                effectiveColumnWidth
+            )
+          ),
+        ]
+      : [0, totalDays];
+
   // Row virtualization: rows are a fixed height, so the visible slice is pure arithmetic.
   // Both panes render only [firstRow, lastRow); the rest is padding/absolute offset, which
   // keeps scrollHeight - and therefore the scroll sync - unchanged.
@@ -396,6 +426,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
     // the virtualized row range. Snapped to whole rows: nothing rendered changes within a
     // row, so a sub-row (or purely horizontal) scroll must not commit.
     setScrollTop(Math.floor(body.scrollTop / rowHeight) * rowHeight);
+    setScrollLeft(Math.floor(body.scrollLeft / SCROLL_LEFT_STEP) * SCROLL_LEFT_STEP);
   }, [rowHeight]);
 
   const handleTaskListScroll = useCallback(() => {
@@ -474,6 +505,8 @@ export const Gantt = factory<GanttFactory>((_props) => {
     if (body) {
       const anchor = zoomAnchorRef.current;
       body.scrollLeft = (body.scrollLeft + anchor) * (effectiveColumnWidth / prev) - anchor;
+      // Now, not on the scroll event a frame later: the day columns to render follow it.
+      handleTimelineScroll();
     }
     zoomAnchorRef.current = 0;
   }, [effectiveColumnWidth]);
@@ -513,10 +546,15 @@ export const Gantt = factory<GanttFactory>((_props) => {
     // Intentionally only re-runs when the target changes, not on every layout/row change.
   }, [scrollToKey]);
 
-  // Stable so TaskBar's memo comparator can rely on reference equality.
+  // Stable so TaskBar's memo comparator can rely on reference equality. That comparator
+  // only looks at what a bar draws, so the bar's own `task` can be stale (changed
+  // dependencies, baseline, custom fields): hand out the current one.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
   const handleTaskClick = useCallback(
     (task: GanttTask) => {
-      onTaskClick?.(task);
+      const row = rowsRef.current.find((r) => r.task.id === task.id);
+      onTaskClick?.(row ? getEffectiveTask(row) : task);
     },
     [onTaskClick]
   );
@@ -632,6 +670,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
       if (timelineHeaderRef.current) {
         timelineHeaderRef.current.scrollLeft += px;
       }
+      handleTimelineScroll();
       prevStartRef.current = bounds.start;
     }
   });
@@ -666,6 +705,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
         rows={visibleRows}
         columns={columns}
         locale={locale}
+        labels={labels}
         getStyles={stableGetStyles}
         bodyRef={taskListBodyRef}
         onScroll={handleTaskListScroll}
@@ -691,7 +731,10 @@ export const Gantt = factory<GanttFactory>((_props) => {
             weekStart={weekStart}
             today={today.format('YYYY-MM-DD')}
             locale={locale}
+            labels={labels}
             isNonWorkingDay={isNonWorkingDay}
+            firstDay={firstDay}
+            lastDay={lastDay}
           />
         </div>
 
@@ -718,6 +761,8 @@ export const Gantt = factory<GanttFactory>((_props) => {
               viewMode={viewMode}
               weekStart={weekStart}
               isNonWorkingDay={isNonWorkingDay}
+              firstDay={firstDay}
+              lastDay={lastDay}
             />
 
             {/* Today line */}
@@ -776,6 +821,7 @@ export const Gantt = factory<GanttFactory>((_props) => {
                     didDrag={drag.didDrag}
                     nudge={drag.nudge}
                     locale={locale}
+                    labels={labels}
                     onTaskClick={handleTaskClick}
                     isCritical={criticalIds.has(task.id)}
                     isSelected={task.id === selectedTaskId}
@@ -819,7 +865,8 @@ export const Gantt = factory<GanttFactory>((_props) => {
               criticalIds={criticalIds}
               firstRow={firstRow}
               lastRow={lastRow}
-              onLinkClick={readOnly ? undefined : handleLinkDelete}
+              labels={labels}
+              onLinkClick={readOnly || !withLinkDelete ? undefined : handleLinkDelete}
             />
           </div>
         </div>

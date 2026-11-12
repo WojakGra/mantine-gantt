@@ -1,21 +1,25 @@
 import dayjs from 'dayjs';
 import React from 'react';
 import type { GetStylesApi } from '@mantine/core';
-import type { GanttColumn, GanttFactory, GanttTreeRow } from './types';
+import { defaultLabels } from './labels';
+import type { GanttColumn, GanttFactory, GanttLabels, GanttTreeRow } from './types';
 import { formatTaskDate, getEffectiveTask } from './utils';
 
-export const defaultColumns: GanttColumn[] = [
-  { header: 'Task Name', render: (t) => t.label },
-  { header: 'Start', render: (t, locale) => formatTaskDate(t.startDate, locale), width: 90 },
+const getDefaultColumns = (labels: GanttLabels): GanttColumn[] => [
+  { header: labels.taskName, render: (t) => t.label },
+  { header: labels.start, render: (t, locale) => formatTaskDate(t.startDate, locale), width: 90 },
   {
-    header: 'End',
+    header: labels.end,
     // `span` is the calendar length of the bar, so this holds with `workingDays` too.
     render: (t, locale, row) =>
       formatTaskDate(dayjs(t.startDate).add(Math.max(0, row.span - 1), 'day'), locale),
     width: 90,
   },
-  { header: 'Duration', render: (t) => `${t.duration}d`, width: 80 },
+  { header: labels.duration, render: (t) => labels.days(t.duration), width: 80 },
 ];
+
+/** English default set - what `Gantt` sizes the panel from (labels don't change widths). */
+export const defaultColumns = getDefaultColumns(defaultLabels);
 
 interface TaskListProps {
   /** Only the rows in the visible range - see `offsetTop` / `contentHeight`. */
@@ -32,13 +36,16 @@ interface TaskListProps {
   contentHeight: number;
   selectedTaskId?: string | null;
   locale: string;
+  labels: GanttLabels;
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }
 
 function TaskListComponent({
+  locale,
+  labels,
   rows,
-  columns = defaultColumns,
+  columns = getDefaultColumns(labels),
   getStyles,
   bodyRef,
   onScroll,
@@ -47,7 +54,6 @@ function TaskListComponent({
   offsetTop,
   contentHeight,
   selectedTaskId,
-  locale,
   collapsed,
   onToggleCollapsed,
 }: TaskListProps) {
@@ -68,7 +74,7 @@ function TaskListComponent({
           type="button"
           {...getStyles('taskListToggle')}
           aria-expanded={!collapsed}
-          aria-label={collapsed ? 'Expand task list' : 'Collapse task list'}
+          aria-label={collapsed ? labels.expandTaskList : labels.collapseTaskList}
           onClick={onToggleCollapsed}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
@@ -121,7 +127,11 @@ function TaskListComponent({
                           {...getStyles('expandChevron')}
                           data-collapsed={collapsed || undefined}
                           aria-expanded={!collapsed}
-                          aria-label={collapsed ? `Expand ${task.label}` : `Collapse ${task.label}`}
+                          aria-label={
+                            collapsed
+                              ? labels.expandTask(task.label)
+                              : labels.collapseTask(task.label)
+                          }
                           onClick={() => onToggleExpand(row.task.id)}
                         >
                           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">

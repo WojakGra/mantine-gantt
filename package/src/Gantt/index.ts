@@ -7,11 +7,11 @@ export type {
   GanttMarker,
   GanttDependency,
   GanttDependencyType,
+  GanttLabels,
   GanttTreeRow,
   GanttStylesNames,
   GanttCssVariables,
   GanttFactory,
-  GanttDragType,
 } from './types';
 
 export {
@@ -28,4 +28,5 @@ export {
   normalizeDependency,
   addWorkingDays,
   getTaskSpan,
+  isWeekend,
 } from './utils';

@@ -1,7 +1,7 @@
 import type { Dayjs } from 'dayjs';
 import React from 'react';
 import { getThemeColor, Tooltip, useMantineTheme, type GetStylesApi } from '@mantine/core';
-import type { GanttDragType, GanttFactory, GanttTask } from './types';
+import type { GanttDragType, GanttFactory, GanttLabels, GanttTask } from './types';
 import {
   dateToPixel,
   dragEdges,
@@ -45,6 +45,7 @@ interface TaskBarProps {
   nudge: (taskId: string, action: 'move' | 'resize', days: number) => void;
   onTaskClick?: (task: GanttTask) => void;
   locale: string;
+  labels: GanttLabels;
 }
 
 function TaskBarComponent({
@@ -69,6 +70,7 @@ function TaskBarComponent({
   nudge,
   onTaskClick,
   locale,
+  labels,
 }: TaskBarProps) {
   const theme = useMantineTheme();
   const formatTaskDate = (date: string | Dayjs) => formatDate(date, locale);
@@ -106,9 +108,9 @@ function TaskBarComponent({
         ? formatTaskDate(next.startDate)
         : `${formatTaskDate(next.startDate)} → ${end}`;
     } else if (dragType === 'resize-end') {
-      dragLabel = `${end} (${next.duration}d)`;
+      dragLabel = `${end} (${labels.days(next.duration)})`;
     } else {
-      dragLabel = `${formatTaskDate(next.startDate)} (${next.duration}d)`;
+      dragLabel = `${formatTaskDate(next.startDate)} (${labels.days(next.duration)})`;
     }
   }
 
@@ -133,15 +135,11 @@ function TaskBarComponent({
       data-locked={isLocked || undefined}
       data-milestone={isMilestone || undefined}
       data-selected={isSelected || undefined}
-      aria-label={
-        isSummary
-          ? `${task.label}, summary, starts ${task.startDate}, ${task.duration} day duration.`
-          : isMilestone
-            ? `${task.label}, milestone, ${task.startDate}.${isLocked ? '' : ' Arrow keys move.'}`
-            : `${task.label}, starts ${task.startDate}, ${task.duration} day duration.${
-                isLocked ? '' : ' Arrow keys move, Shift+Arrow resize.'
-              }`
-      }
+      aria-label={labels.taskBar(
+        task,
+        isSummary ? 'summary' : isMilestone ? 'milestone' : 'task',
+        !inert
+      )}
       onPointerDown={inert ? undefined : (e) => startDrag('move', task.id, e)}
       onClick={() => {
         if (didDrag()) {
@@ -258,6 +256,7 @@ function arePropsEqual(prevProps: TaskBarProps, nextProps: TaskBarProps): boolea
     prevProps.nudge === nextProps.nudge &&
     prevProps.onTaskClick === nextProps.onTaskClick &&
     prevProps.locale === nextProps.locale &&
+    prevProps.labels === nextProps.labels &&
     prevProps.getStyles === nextProps.getStyles &&
     prevProps.startDate.isSame(nextProps.startDate)
   );

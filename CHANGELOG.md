@@ -3,6 +3,37 @@
 Breaking changes and migration notes per release. Everything else is in the
 [GitHub release history](https://github.com/WojakGra/mantine-gantt/releases).
 
+## 0.8.0
+
+### Breaking
+
+**React 19.2 is the declared minimum.** The peer range said `^18 || ^19`, but Mantine 9 already
+requires `^19.2.0`, so React 18 never worked with 0.7.0.
+
+**Day view draws its day lines as one element.** `gridLine` is a single full-width element with
+a repeating CSS mask instead of one `div` per day. `background-color` on `gridLine` still sets
+the line color; a `left`/`width` override no longer applies in day view. Week and month views
+are unchanged.
+
+**Day header cells and non-working-day shading are virtualized.** Once the timeline is measured,
+only the columns near the viewport are rendered. jsdom never measures, so tests see every column.
+
+**A link that cannot be deleted has no hit area.** With `readOnly` or `withLinkDelete={false}`
+the invisible `data-hit` path is not rendered.
+
+### Added
+
+- `labels` prop: translate the column headers, week header, `aria-label`s and announcements.
+- `withLinkDelete` prop, and keyboard deletion of a focused link (Delete, Backspace, Enter, Space).
+- `isWeekend` is exported: the default `isNonWorkingDay`, to extend with your own holidays.
+
+### Fixed
+
+- The ESM build imports `dayjs/plugin/isoWeek.js` with its extension, so it loads in native Node
+  ESM (SSR, Vitest) instead of failing with `ERR_MODULE_NOT_FOUND`.
+- `onTaskClick` receives the current task. It could hand out a stale object after a change the
+  bar does not draw (`dependencies`, `baseline`, custom fields).
+
 ## 0.7.0
 
 ### Breaking

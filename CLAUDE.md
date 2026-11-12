@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`mantine-gantt` - a single-component npm library: an interactive Gantt chart for [Mantine](https://mantine.dev/). React 18/19, TypeScript, drag interactions on plain pointer events (no drag library), `dayjs` for dates. The published package lives in `package/`; `docs/` is a Next.js docs site. Yarn 4 (Berry, via Corepack - run `corepack enable` once) workspace, Node 24 (`.nvmrc`).
+`mantine-gantt` - a single-component npm library: an interactive Gantt chart for [Mantine](https://mantine.dev/). React 19.2+, TypeScript, drag interactions on plain pointer events (no drag library), `dayjs` for dates. The published package lives in `package/`; `docs/` is a Next.js docs site. Yarn 4 (Berry, via Corepack - run `corepack enable` once) workspace, Node 24 (`.nvmrc`).
 
 The root `package.json` (`name: m-90d2bb8`) is **not** published - it only holds scripts and devDependencies. The published manifest is `package/package.json`. Bump versions there (or via the release scripts), never in the root.
 
@@ -24,7 +24,7 @@ Run from repo root unless noted.
 
 ## Architecture
 
-All source is one component family under `package/src/Gantt/`. `package/src/index.ts` is the public entry and re-exports a subset of `Gantt/index.ts`.
+All source is one component family under `package/src/Gantt/`. `package/src/index.ts` is the public entry and re-exports everything from `Gantt/index.ts` - add public exports there.
 
 **`Gantt.tsx` is the stateful orchestrator.** Everything else is a presentational child that receives a `getStyles` function and computed geometry. Key responsibilities living in `Gantt.tsx`:
 

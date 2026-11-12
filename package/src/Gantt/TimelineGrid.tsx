@@ -14,6 +14,9 @@ interface TimelineGridProps {
   viewMode: 'day' | 'week' | 'month';
   weekStart: 0 | 1;
   isNonWorkingDay?: (date: Date) => boolean;
+  /** Day columns `[firstDay, lastDay)` whose shading is rendered in day view. */
+  firstDay: number;
+  lastDay: number;
 }
 
 function TimelineGridComponent({
@@ -26,6 +29,8 @@ function TimelineGridComponent({
   viewMode,
   weekStart,
   isNonWorkingDay = isWeekend,
+  firstDay,
+  lastDay,
 }: TimelineGridProps) {
   // Generate day-based grid data (always needed for positioning)
   const dayGridData = useMemo(() => {
@@ -69,7 +74,8 @@ function TimelineGridComponent({
   const totalHeight = rowCount * rowHeight;
 
   // Day view: a line per day, weeks as major lines. Week/month view: weeks, months as major.
-  const gridLines = viewMode === 'day' ? dayGridData.map((col) => col.x) : weekSeparators;
+  // The day lines are one element with a repeating CSS mask instead of a div per day.
+  const gridLines = viewMode === 'day' ? [] : weekSeparators;
   const majorGridLines = viewMode === 'day' ? weekSeparators : monthSeparators;
 
   return (
@@ -77,15 +83,20 @@ function TimelineGridComponent({
       {/* Weekend backgrounds (only in day view) */}
       {viewMode === 'day' &&
         dayGridData
+          .slice(firstDay, lastDay)
           .filter((col) => col.isWeekend)
-          .map((col, index) => (
+          .map((col) => (
             <div
-              key={`weekend-${index}`}
+              key={`weekend-${col.x}`}
               {...getStyles('weekendBackground', {
                 style: { left: col.x, width: columnWidth, height: totalHeight },
               })}
             />
           ))}
+
+      {viewMode === 'day' && (
+        <div {...getStyles('gridLine', { style: { height: totalHeight } })} data-days />
+      )}
 
       {/* Regular grid lines */}
       {gridLines.map((x, index) => (
