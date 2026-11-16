@@ -1,1 +1,1 @@
-export * from './Gantt';
+export * from './Gantt/index.js';
